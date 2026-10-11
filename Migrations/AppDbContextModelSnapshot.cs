@@ -62,10 +62,6 @@ namespace AssetHub.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("UserDomain")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");

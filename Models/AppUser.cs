@@ -13,7 +13,6 @@ public class AppUser
     public string JobTitle { get; set; } = string.Empty;
     public int ImagesCount { get; set; }
     public string? ImageUrl { get; set; }
-    public string Role { get; set; } = "Standard User";
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
