@@ -1,5 +1,6 @@
 ﻿using AssetHub.Api.Models;
 using AssetHub.Models;
+using AssetHub.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -23,6 +24,14 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Device>()
             .HasIndex(x => x.DeviceCode)
             .IsUnique();
+
+        // Devices without a serial (NULL) are allowed; any non-null serial must be unique.
+        // Values are stored normalized (trimmed, upper case) by DevicesController.
+        modelBuilder.Entity<Device>()
+            .HasIndex(x => x.SerialNumber)
+            .IsUnique()
+            .HasDatabaseName(SerialNumbers.UniqueIndexName)
+            .HasFilter("[SerialNumber] IS NOT NULL");
 
         modelBuilder.Entity<SystemUser>()
             .HasIndex(x => x.UserName)

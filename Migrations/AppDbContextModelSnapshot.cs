@@ -215,7 +215,7 @@ namespace AssetHub.Api.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("SerialNumber")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -237,6 +237,11 @@ namespace AssetHub.Api.Migrations
 
                     b.HasIndex("DeviceCode")
                         .IsUnique();
+
+                    b.HasIndex("SerialNumber")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Devices_SerialNumber")
+                        .HasFilter("[SerialNumber] IS NOT NULL");
 
                     b.ToTable("Devices");
                 });

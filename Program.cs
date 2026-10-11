@@ -151,3 +151,6 @@ app.MapControllers();
 await SuperAdminSeeder.SeedAsync(app.Services);
 
 app.Run();
+
+// Lets the integration tests host the API with WebApplicationFactory<Program>.
+public partial class Program { }

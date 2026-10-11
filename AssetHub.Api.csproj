@@ -17,6 +17,14 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
 
+  <!-- The test project lives in a subfolder; keep its files out of the API build. -->
+  <ItemGroup>
+    <Compile Remove="AssetHub.Api.Tests\**" />
+    <Content Remove="AssetHub.Api.Tests\**" />
+    <None Remove="AssetHub.Api.Tests\**" />
+    <EmbeddedResource Remove="AssetHub.Api.Tests\**" />
+  </ItemGroup>
+
   <ItemGroup>
     <Folder Include="Helpers\" />
     <Folder Include="Services\" />

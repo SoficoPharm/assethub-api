@@ -9,3 +9,6 @@ wwwroot/uploads/
 
 # Local secrets (JWT key, seed credentials). See appsettings.Development.example.json
 appsettings.Development.json
+
+# Test results
+TestResults/

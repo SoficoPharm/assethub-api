@@ -142,6 +142,32 @@ public class DevicesController : ControllerBase
         });
     }
 
+    /// <summary>Lets the add/edit forms warn about a duplicate serial before saving.</summary>
+    [Authorize(Policy = Policies.CanEdit)]
+    [HttpGet("check-serial")]
+    public async Task<IActionResult> CheckSerial([FromQuery] string? serial, [FromQuery] string? excludeCode)
+    {
+        var normalized = SerialNumbers.Normalize(serial);
+
+        int? excludeId = null;
+        if (!string.IsNullOrWhiteSpace(excludeCode))
+        {
+            excludeId = await _context.Devices
+                .Where(x => x.DeviceCode == excludeCode)
+                .Select(x => (int?)x.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        var owner = await FindSerialOwnerAsync(normalized, excludeId);
+
+        return Ok(new
+        {
+            exists = owner != null,
+            deviceCode = owner?.DeviceCode,
+            deviceName = owner?.DeviceName
+        });
+    }
+
     [Authorize(Policy = Policies.CanEdit)]
     [HttpPost]
     [Consumes("multipart/form-data")]
@@ -156,6 +182,11 @@ public class DevicesController : ControllerBase
         if (!DeviceStatuses.Editable.Contains(status))
             return BadRequest(new { message = $"Status must be one of: {string.Join(", ", DeviceStatuses.Editable)}. Use Assignments to assign a device." });
 
+        var serial = SerialNumbers.Normalize(request.SerialNumber);
+        var serialOwner = await FindSerialOwnerAsync(serial, excludeDeviceId: null);
+        if (serialOwner != null)
+            return SerialConflict(serial!, serialOwner);
+
         var imageUrl = await SaveDeviceImageAsync(request.ImageFile);
 
         if (string.IsNullOrWhiteSpace(imageUrl))
@@ -166,7 +197,7 @@ public class DevicesController : ControllerBase
             DeviceCode = await CodeGenerator.NextAsync(_context.Devices.Select(x => x.DeviceCode), "DEV-", 4),
             DeviceName = request.DeviceName.Trim(),
             ImeiSerial = request.ImeiSerial?.Trim(),
-            SerialNumber = request.SerialNumber?.Trim(),
+            SerialNumber = serial,
             DeviceType = request.DeviceType?.Trim() ?? "",
             Platform = string.IsNullOrWhiteSpace(request.Platform)
                 ? request.DeviceType?.Trim() ?? ""
@@ -193,7 +224,9 @@ public class DevicesController : ControllerBase
 
         _audit.Log(AuditActions.Create, $"{device.DeviceName} ({device.DeviceCode})", $"Added device {device.DeviceName}");
 
-        await _context.SaveChangesAsync();
+        var raceConflict = await SaveCheckingSerialAsync(serial, excludeDeviceId: null);
+        if (raceConflict != null)
+            return raceConflict;
 
         return Ok(new
         {
@@ -219,6 +252,11 @@ public class DevicesController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.DeviceName))
             return BadRequest(new { message = "Device name is required" });
 
+        var serial = SerialNumbers.Normalize(request.SerialNumber);
+        var serialOwner = await FindSerialOwnerAsync(serial, excludeDeviceId: device.Id);
+        if (serialOwner != null)
+            return SerialConflict(serial!, serialOwner);
+
         var status = string.IsNullOrWhiteSpace(request.Status) ? device.Status : request.Status.Trim();
         var statusError = await ApplyStatusChangeAsync(device, status);
         if (statusError != null)
@@ -228,7 +266,7 @@ public class DevicesController : ControllerBase
 
         device.DeviceName = request.DeviceName.Trim();
         device.ImeiSerial = request.ImeiSerial?.Trim();
-        device.SerialNumber = request.SerialNumber?.Trim();
+        device.SerialNumber = serial;
         device.DeviceType = request.DeviceType?.Trim() ?? "";
         device.Platform = string.IsNullOrWhiteSpace(request.Platform)
             ? request.DeviceType?.Trim() ?? ""
@@ -254,7 +292,9 @@ public class DevicesController : ControllerBase
 
         _audit.Log(AuditActions.Update, $"{device.DeviceName} ({device.DeviceCode})", $"Updated device {device.DeviceName}");
 
-        await _context.SaveChangesAsync();
+        var raceConflict = await SaveCheckingSerialAsync(serial, excludeDeviceId: device.Id);
+        if (raceConflict != null)
+            return raceConflict;
 
         return Ok(new
         {
@@ -346,6 +386,42 @@ public class DevicesController : ControllerBase
         device.AssignedUserId = null;
 
         return null;
+    }
+
+    /// <summary>The device that already uses <paramref name="serial"/> (normalized), other than the excluded one.</summary>
+    private Task<Device?> FindSerialOwnerAsync(string? serial, int? excludeDeviceId)
+    {
+        if (serial == null)
+            return Task.FromResult<Device?>(null);
+
+        return _context.Devices
+            .AsNoTracking()
+            .Where(x => x.SerialNumber == serial && (excludeDeviceId == null || x.Id != excludeDeviceId))
+            .FirstOrDefaultAsync();
+    }
+
+    private ConflictObjectResult SerialConflict(string serial, Device owner) =>
+        Conflict(new { message = SerialNumbers.ConflictMessage(serial, owner.DeviceCode, owner.DeviceName) });
+
+    /// <summary>
+    /// Saves, turning a unique-index violation on the serial (two requests racing past the
+    /// pre-check) into the same 409 as the pre-check. Returns null on success.
+    /// </summary>
+    private async Task<IActionResult?> SaveCheckingSerialAsync(string? serial, int? excludeDeviceId)
+    {
+        try
+        {
+            await _context.SaveChangesAsync();
+            return null;
+        }
+        catch (DbUpdateException ex) when (serial != null && SerialNumbers.IsUniqueViolation(ex))
+        {
+            var owner = await FindSerialOwnerAsync(serial, excludeDeviceId);
+            if (owner == null)
+                throw;
+
+            return SerialConflict(serial, owner);
+        }
     }
 
     private async Task<string?> SaveDeviceImageAsync(IFormFile? file)
