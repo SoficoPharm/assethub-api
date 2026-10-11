@@ -23,6 +23,10 @@ public class AppDbContext : DbContext
             .HasIndex(x => x.DeviceCode)
             .IsUnique();
 
+        modelBuilder.Entity<SystemUser>()
+            .HasIndex(x => x.UserName)
+            .IsUnique();
+
         modelBuilder.Entity<Assignment>()
             .HasOne(x => x.User)
             .WithMany()
