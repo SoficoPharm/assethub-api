@@ -2,6 +2,7 @@
 using AssetHub.Api.Authorization;
 using AssetHub.Api.Models;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,10 +17,12 @@ namespace AssetHub.Api.Controllers;
 public class DepartmentsController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly AuditService _audit;
 
-    public DepartmentsController(AppDbContext context)
+    public DepartmentsController(AppDbContext context, AuditService audit)
     {
         _context = context;
+        _audit = audit;
     }
 
     [HttpGet]
@@ -64,14 +67,7 @@ public class DepartmentsController : ControllerBase
 
         _context.Departments.Add(department);
 
-        _context.AuditLogs.Add(new AuditLog
-        {
-            Actor = "Admin User",
-            LogAction = "Create",
-            Target = name,
-            Details = $"Created department {name}",
-            Timestamp = DateTime.Now
-        });
+        _audit.Log(AuditActions.Create, name, $"Created department {name}");
 
         await _context.SaveChangesAsync();
 
@@ -115,14 +111,7 @@ public class DepartmentsController : ControllerBase
         foreach (var user in users)
             user.Department = newName;
 
-        _context.AuditLogs.Add(new AuditLog
-        {
-            Actor = "Admin User",
-            LogAction = "Update",
-            Target = newName,
-            Details = $"Updated department {oldName} to {newName}",
-            Timestamp = DateTime.Now
-        });
+        _audit.Log(AuditActions.Update, newName, $"Updated department {oldName} to {newName}");
 
         await _context.SaveChangesAsync();
 
@@ -145,14 +134,7 @@ public class DepartmentsController : ControllerBase
 
         _context.Departments.Remove(department);
 
-        _context.AuditLogs.Add(new AuditLog
-        {
-            Actor = "Admin User",
-            LogAction = "Delete",
-            Target = department.DepartmentName,
-            Details = $"Deleted department {department.DepartmentName}",
-            Timestamp = DateTime.Now
-        });
+        _audit.Log(AuditActions.Delete, department.DepartmentName, $"Deleted department {department.DepartmentName}");
 
         await _context.SaveChangesAsync();
 

@@ -1,6 +1,7 @@
 ﻿using AssetHub.Api.Data;
 using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Services;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,11 +15,13 @@ namespace AssetHub.Api.Controllers;
 public class DevicesController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly AuditService _audit;
     private readonly IWebHostEnvironment _environment;
 
-    public DevicesController(AppDbContext context, IWebHostEnvironment environment)
+    public DevicesController(AppDbContext context, IWebHostEnvironment environment, AuditService audit)
     {
         _context = context;
+        _audit = audit;
         _environment = environment;
     }
 
@@ -184,14 +187,7 @@ public class DevicesController : ControllerBase
 
             _context.Devices.Add(device);
 
-            _context.AuditLogs.Add(new AuditLog
-            {
-                Actor = "Admin User",
-                LogAction = "Create",
-                Target = $"{device.DeviceName} ({device.DeviceCode})",
-                Details = $"Added device {device.DeviceName}",
-                Timestamp = DateTime.Now
-            });
+            _audit.Log(AuditActions.Create, $"{device.DeviceName} ({device.DeviceCode})", $"Added device {device.DeviceName}");
 
             await _context.SaveChangesAsync();
 
@@ -253,14 +249,7 @@ public class DevicesController : ControllerBase
             if (device.Status is "Available" or "Maintenance" or "Inactive" or "Lost")
                 device.AssignedUserId = null;
 
-            _context.AuditLogs.Add(new AuditLog
-            {
-                Actor = "Admin User",
-                LogAction = "Update",
-                Target = $"{device.DeviceName} ({device.DeviceCode})",
-                Details = $"Updated device {device.DeviceName}",
-                Timestamp = DateTime.Now
-            });
+            _audit.Log(AuditActions.Update, $"{device.DeviceName} ({device.DeviceCode})", $"Updated device {device.DeviceName}");
 
             await _context.SaveChangesAsync();
 
@@ -290,14 +279,7 @@ public class DevicesController : ControllerBase
         if (status is "Available" or "Maintenance" or "Inactive" or "Lost")
             device.AssignedUserId = null;
 
-        _context.AuditLogs.Add(new AuditLog
-        {
-            Actor = "Admin User",
-            LogAction = status == "Lost" ? "Alert" : "Update",
-            Target = $"{device.DeviceName} ({device.DeviceCode})",
-            Details = $"Changed device status to {status}",
-            Timestamp = DateTime.Now
-        });
+        _audit.Log(status == "Lost" ? AuditActions.Alert : AuditActions.Update, $"{device.DeviceName} ({device.DeviceCode})", $"Changed device status to {status}");
 
         await _context.SaveChangesAsync();
 
@@ -315,14 +297,7 @@ public class DevicesController : ControllerBase
 
         _context.Devices.Remove(device);
 
-        _context.AuditLogs.Add(new AuditLog
-        {
-            Actor = "Admin User",
-            LogAction = "Delete",
-            Target = $"{device.DeviceName} ({device.DeviceCode})",
-            Details = $"Deleted device {device.DeviceName}",
-            Timestamp = DateTime.Now
-        });
+        _audit.Log(AuditActions.Delete, $"{device.DeviceName} ({device.DeviceCode})", $"Deleted device {device.DeviceName}");
 
         await _context.SaveChangesAsync();
 

@@ -1,5 +1,7 @@
-﻿using AssetHub.Api.Data;
+using AssetHub.Api.Data;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Models;
+using AssetHub.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -13,6 +15,8 @@ namespace AssetHub.Api.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
+    public static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(8);
+
     private readonly AppDbContext _context;
     private readonly IConfiguration _config;
 
@@ -28,16 +32,20 @@ public class AuthController : ControllerBase
         var user = await _context.SystemUsers
             .FirstOrDefaultAsync(x => x.UserName == request.UserName);
 
-        if (user == null)
-            return Unauthorized("Invalid username or password");
-
-        if (user.Password != request.Password)
-            return Unauthorized("Invalid username or password");
+        if (user == null || !PasswordHasher.Verify(request.Password, user.Password, out var needsRehash))
+            return Unauthorized(new { message = "Invalid username or password" });
 
         if (!user.IsActive)
-            return Unauthorized("User is inactive");
+            return Unauthorized(new { message = "User is inactive" });
 
-        var token = GenerateToken(user.UserName, user.Role);
+        // Lazy migration: legacy plaintext passwords are hashed on first successful login.
+        if (needsRehash)
+        {
+            user.Password = PasswordHasher.Hash(request.Password);
+            await _context.SaveChangesAsync();
+        }
+
+        var token = GenerateToken(user);
 
         return Ok(new
         {
@@ -52,12 +60,14 @@ public class AuthController : ControllerBase
         });
     }
 
-    private string GenerateToken(string userName, string role)
+    private string GenerateToken(SystemUser user)
     {
         var claims = new[]
         {
-            new Claim(ClaimTypes.Name, userName),
-            new Claim(ClaimTypes.Role, role)
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Name, user.UserName),
+            new Claim(CurrentUser.FullNameClaim, user.FullName),
+            new Claim(ClaimTypes.Role, user.Role)
         };
 
         var key = new SymmetricSecurityKey(
@@ -70,7 +80,7 @@ public class AuthController : ControllerBase
             issuer: _config["Jwt:Issuer"],
             audience: _config["Jwt:Audience"],
             claims: claims,
-            expires: DateTime.Now.AddDays(30),
+            expires: DateTime.UtcNow.Add(TokenLifetime),
             signingCredentials: creds
         );
 

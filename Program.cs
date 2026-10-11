@@ -4,6 +4,7 @@ using AssetHub.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,11 +37,17 @@ builder.Services.AddCors(options =>
     });
 });
 
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
+{
+    throw new InvalidOperationException(
+        "Jwt:Key is missing or shorter than 32 characters. Set it in appsettings.Development.json " +
+        "(see appsettings.Development.example.json) or the Jwt__Key environment variable.");
+}
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        var key = builder.Configuration["Jwt:Key"];
-
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -52,8 +59,40 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = builder.Configuration["Jwt:Audience"],
 
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(key!)
+                Encoding.UTF8.GetBytes(jwtKey)
             )
+        };
+
+        // Reject tokens of users that were deleted, deactivated or had their role changed
+        // after the token was issued.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var principal = context.Principal!;
+
+                if (!int.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                {
+                    context.Fail("Token has no user id");
+                    return;
+                }
+
+                var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                var user = await db.SystemUsers
+                    .AsNoTracking()
+                    .Where(x => x.Id == userId)
+                    .Select(x => new { x.IsActive, x.Role })
+                    .FirstOrDefaultAsync();
+
+                if (user == null || !user.IsActive)
+                {
+                    context.Fail("User no longer exists or is inactive");
+                    return;
+                }
+
+                if (user.Role != principal.FindFirstValue(ClaimTypes.Role))
+                    context.Fail("User role has changed; sign in again");
+            }
         };
     });
 
@@ -88,5 +127,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+await SuperAdminSeeder.SeedAsync(app.Services);
 
 app.Run();

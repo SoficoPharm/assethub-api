@@ -1,6 +1,7 @@
 ﻿using AssetHub.Api.Data;
 using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Services;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,10 +15,12 @@ namespace AssetHub.Api.Controllers;
 public class DeviceTypesController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly AuditService _audit;
 
-    public DeviceTypesController(AppDbContext context)
+    public DeviceTypesController(AppDbContext context, AuditService audit)
     {
         _context = context;
+        _audit = audit;
     }
 
     [HttpGet]
@@ -62,14 +65,7 @@ public class DeviceTypesController : ControllerBase
 
         _context.DeviceTypes.Add(item);
 
-        _context.AuditLogs.Add(new AuditLog
-        {
-            Actor = "Admin User",
-            LogAction = "Create",
-            Target = typeName,
-            Details = $"Created device type {typeName}",
-            Timestamp = DateTime.Now
-        });
+        _audit.Log(AuditActions.Create, typeName, $"Created device type {typeName}");
 
         await _context.SaveChangesAsync();
 
@@ -117,14 +113,7 @@ public class DeviceTypesController : ControllerBase
             device.Platform = newName;
         }
 
-        _context.AuditLogs.Add(new AuditLog
-        {
-            Actor = "Admin User",
-            LogAction = "Update",
-            Target = newName,
-            Details = $"Updated device type {oldName} to {newName}",
-            Timestamp = DateTime.Now
-        });
+        _audit.Log(AuditActions.Update, newName, $"Updated device type {oldName} to {newName}");
 
         await _context.SaveChangesAsync();
 
@@ -149,14 +138,7 @@ public class DeviceTypesController : ControllerBase
 
         _context.DeviceTypes.Remove(item);
 
-        _context.AuditLogs.Add(new AuditLog
-        {
-            Actor = "Admin User",
-            LogAction = "Delete",
-            Target = item.TypeName,
-            Details = $"Deleted device type {item.TypeName}",
-            Timestamp = DateTime.Now
-        });
+        _audit.Log(AuditActions.Delete, item.TypeName, $"Deleted device type {item.TypeName}");
 
         await _context.SaveChangesAsync();
 

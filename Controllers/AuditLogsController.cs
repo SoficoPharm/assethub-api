@@ -1,6 +1,7 @@
 ﻿using AssetHub.Api.Data;
 using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Services;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,10 +15,12 @@ namespace AssetHub.Api.Controllers;
 public class AuditLogsController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly AuditService _audit;
 
-    public AuditLogsController(AppDbContext context)
+    public AuditLogsController(AppDbContext context, AuditService audit)
     {
         _context = context;
+        _audit = audit;
     }
 
     [HttpGet]
@@ -97,6 +100,10 @@ public class AuditLogsController : ControllerBase
             return Ok(new { message = "No audit logs to clear" });
 
         _context.AuditLogs.RemoveRange(logs);
+
+        // Leave a trace of who wiped the log.
+        _audit.Log(AuditActions.Delete, "Audit Logs", $"Cleared {logs.Count} audit log entries");
+
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Audit logs cleared successfully" });

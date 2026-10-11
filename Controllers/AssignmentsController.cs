@@ -1,6 +1,7 @@
 ﻿using AssetHub.Api.Data;
 using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Services;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,10 +15,12 @@ namespace AssetHub.Api.Controllers;
 public class AssignmentsController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly AuditService _audit;
 
-    public AssignmentsController(AppDbContext context)
+    public AssignmentsController(AppDbContext context, AuditService audit)
     {
         _context = context;
+        _audit = audit;
     }
 
     [HttpGet]
@@ -85,14 +88,7 @@ public class AssignmentsController : ControllerBase
 
             _context.Assignments.Add(assignment);
 
-            _context.AuditLogs.Add(new AuditLog
-            {
-                Actor = "Admin User",
-                LogAction = "Assign",
-                Target = $"{user.FullName} ({user.EmployeeId})",
-                Details = $"Assigned {device.DeviceName} ({device.DeviceCode})",
-                Timestamp = DateTime.Now
-            });
+            _audit.Log(AuditActions.Assign, $"{user.FullName} ({user.EmployeeId})", $"Assigned {device.DeviceName} ({device.DeviceCode})");
 
             await _context.SaveChangesAsync();
 
@@ -131,14 +127,7 @@ public class AssignmentsController : ControllerBase
             assignment.Device.Status = "Available";
             assignment.Device.AssignedUserId = null;
 
-            _context.AuditLogs.Add(new AuditLog
-            {
-                Actor = "Admin User",
-                LogAction = "Return",
-                Target = $"{assignment.User.FullName} ({assignment.User.EmployeeId})",
-                Details = $"Returned {assignment.Device.DeviceName} ({assignment.Device.DeviceCode})",
-                Timestamp = DateTime.Now
-            });
+            _audit.Log(AuditActions.Return, $"{assignment.User.FullName} ({assignment.User.EmployeeId})", $"Returned {assignment.Device.DeviceName} ({assignment.Device.DeviceCode})");
 
             await _context.SaveChangesAsync();
 

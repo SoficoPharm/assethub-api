@@ -1,6 +1,7 @@
 ﻿using AssetHub.Api.Data;
 using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Services;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,11 +15,13 @@ namespace AssetHub.Api.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly AuditService _audit;
     private readonly IWebHostEnvironment _environment;
 
-    public UsersController(AppDbContext context, IWebHostEnvironment environment)
+    public UsersController(AppDbContext context, IWebHostEnvironment environment, AuditService audit)
     {
         _context = context;
+        _audit = audit;
         _environment = environment;
     }
 
@@ -154,14 +157,7 @@ public class UsersController : ControllerBase
 
             _context.Users.Add(user);
 
-            _context.AuditLogs.Add(new AuditLog
-            {
-                Actor = "Admin User",
-                LogAction = "Create",
-                Target = $"{user.FullName} ({user.EmployeeId})",
-                Details = "Created new user profile",
-                Timestamp = DateTime.Now
-            });
+            _audit.Log(AuditActions.Create, $"{user.FullName} ({user.EmployeeId})", "Created employee");
 
             await _context.SaveChangesAsync();
 
@@ -231,14 +227,7 @@ public class UsersController : ControllerBase
                 user.ImagesCount = 0;
             }
 
-            _context.AuditLogs.Add(new AuditLog
-            {
-                Actor = "Admin User",
-                LogAction = "Update",
-                Target = $"{user.FullName} ({user.EmployeeId})",
-                Details = "Updated user profile",
-                Timestamp = DateTime.Now
-            });
+            _audit.Log(AuditActions.Update, $"{user.FullName} ({user.EmployeeId})", "Updated employee");
 
             await _context.SaveChangesAsync();
 
@@ -282,14 +271,7 @@ public class UsersController : ControllerBase
 
         _context.Users.Remove(user);
 
-        _context.AuditLogs.Add(new AuditLog
-        {
-            Actor = "Admin User",
-            LogAction = "Delete",
-            Target = $"{user.FullName} ({user.EmployeeId})",
-            Details = "Deleted user profile",
-            Timestamp = DateTime.Now
-        });
+        _audit.Log(AuditActions.Delete, $"{user.FullName} ({user.EmployeeId})", "Deleted employee");
 
         await _context.SaveChangesAsync();
 
