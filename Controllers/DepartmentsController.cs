@@ -1,4 +1,5 @@
 ﻿using AssetHub.Api.Data;
+using AssetHub.Api.Authorization;
 using AssetHub.Api.Models;
 using AssetHub.Api.DTOs;
 using Microsoft.AspNetCore.Authorization;
@@ -39,6 +40,7 @@ public class DepartmentsController : ControllerBase
         return Ok(departments);
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpPost]
     public async Task<IActionResult> CreateDepartment([FromBody] CreateDepartmentDto dto)
     {
@@ -82,6 +84,7 @@ public class DepartmentsController : ControllerBase
         });
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdateDepartment(int id, [FromBody] UpdateDepartmentDto dto)
     {
@@ -126,6 +129,7 @@ public class DepartmentsController : ControllerBase
         return Ok(new { message = "Department updated successfully" });
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteDepartment(int id)
     {

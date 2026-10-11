@@ -1,4 +1,5 @@
 ﻿using AssetHub.Api.Data;
+using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -37,6 +38,7 @@ public class DeviceTypesController : ControllerBase
         return Ok(data);
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateDeviceTypeDto dto)
     {
@@ -80,6 +82,7 @@ public class DeviceTypesController : ControllerBase
         });
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateDeviceTypeDto dto)
     {
@@ -130,6 +133,7 @@ public class DeviceTypesController : ControllerBase
 
 
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {

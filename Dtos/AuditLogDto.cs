@@ -10,11 +10,3 @@ public class AuditLogDto
     public string Target { get; set; } = string.Empty;
     public string Details { get; set; } = string.Empty;
 }
-
-public class CreateAuditLogDto
-{
-    public string Actor { get; set; } = string.Empty;
-    public string LogAction { get; set; } = string.Empty;
-    public string Target { get; set; } = string.Empty;
-    public string Details { get; set; } = string.Empty;
-}

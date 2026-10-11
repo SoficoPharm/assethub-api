@@ -1,4 +1,5 @@
 ﻿using AssetHub.Api.Data;
+using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -137,6 +138,7 @@ public class DevicesController : ControllerBase
         });
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpPost]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(25_000_000)]
@@ -206,6 +208,7 @@ public class DevicesController : ControllerBase
         }
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpPut("by-code/{code}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(25_000_000)]
@@ -273,6 +276,7 @@ public class DevicesController : ControllerBase
         }
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpPut("{id}/status")]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] string status)
     {
@@ -300,6 +304,7 @@ public class DevicesController : ControllerBase
         return Ok(new { message = "Device status updated successfully" });
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpDelete("by-code/{code}")]
     public async Task<IActionResult> DeleteDeviceByCode(string code)
     {

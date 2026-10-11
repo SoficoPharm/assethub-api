@@ -1,4 +1,5 @@
 ﻿using AssetHub.Api.Data;
+using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -86,53 +87,7 @@ public class AuditLogsController : ControllerBase
         return Ok(log);
     }
 
-    [HttpPost]
-    public async Task<IActionResult> CreateAuditLog([FromBody] CreateAuditLogDto dto)
-    {
-        if (string.IsNullOrWhiteSpace(dto.Actor))
-            return BadRequest(new { message = "Actor is required" });
-
-        if (string.IsNullOrWhiteSpace(dto.LogAction))
-            return BadRequest(new { message = "Action is required" });
-
-        var log = new AuditLog
-        {
-            Timestamp = DateTime.Now,
-            Actor = dto.Actor.Trim(),
-            LogAction = dto.LogAction.Trim(),
-            Target = dto.Target?.Trim() ?? "",
-            Details = dto.Details?.Trim() ?? ""
-        };
-
-        _context.AuditLogs.Add(log);
-        await _context.SaveChangesAsync();
-
-        return Ok(new AuditLogDto
-        {
-            Id = log.Id,
-            Timestamp = log.Timestamp,
-            TimestampText = log.Timestamp.ToString("MMM dd, yyyy HH:mm"),
-            Actor = log.Actor,
-            LogAction = log.LogAction,
-            Target = log.Target,
-            Details = log.Details
-        });
-    }
-
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> DeleteAuditLog(int id)
-    {
-        var log = await _context.AuditLogs.FindAsync(id);
-
-        if (log == null)
-            return NotFound(new { message = "Audit log not found" });
-
-        _context.AuditLogs.Remove(log);
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Audit log deleted successfully" });
-    }
-
+    [Authorize(Policy = Policies.RequireSuperAdmin)]
     [HttpDelete("clear")]
     public async Task<IActionResult> ClearAuditLogs()
     {

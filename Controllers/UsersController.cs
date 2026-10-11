@@ -1,4 +1,5 @@
 ﻿using AssetHub.Api.Data;
+using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -103,6 +104,7 @@ public class UsersController : ControllerBase
         });
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpPost]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(25_000_000)]
@@ -177,6 +179,7 @@ public class UsersController : ControllerBase
         }
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpPut("{id:int}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(25_000_000)]
@@ -252,6 +255,7 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteUser(int id)
     {

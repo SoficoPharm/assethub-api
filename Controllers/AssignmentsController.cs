@@ -1,4 +1,5 @@
 ﻿using AssetHub.Api.Data;
+using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -46,6 +47,7 @@ public class AssignmentsController : ControllerBase
         return Ok(data);
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpPost]
     public async Task<IActionResult> AssignDevice([FromBody] AssignDeviceRequest request)
     {
@@ -106,6 +108,7 @@ public class AssignmentsController : ControllerBase
         }
     }
 
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpPut("{id:int}/return")]
     public async Task<IActionResult> ReturnDevice(int id)
     {

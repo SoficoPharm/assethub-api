@@ -1,3 +1,4 @@
+using AssetHub.Api.Authorization;
 using AssetHub.Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -51,7 +52,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+// GET endpoints only need [Authorize] (any authenticated user).
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(Policies.RequireSuperAdmin, policy => policy.RequireRole(Roles.SuperAdmin));
+    options.AddPolicy(Policies.CanEdit, policy => policy.RequireRole(Roles.SuperAdmin, Roles.Admin));
+});
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
