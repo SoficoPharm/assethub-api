@@ -42,10 +42,8 @@ public class AssignmentsController : ControllerBase
             initials = GetInitials(x.User.FullName),
             device = x.Device.DeviceName,
             model = x.Device.Model,
-            assignedDate = DisplayTime.Format(x.AssignedDate, "MMM dd, yyyy"),
-            returnedDate = DisplayTime.Format(x.ReturnedDate, "MMM dd, yyyy") ?? "—",
-            assignedDateRaw = x.AssignedDate,
-            returnedDateRaw = x.ReturnedDate,
+            assignedDate = x.AssignedDate,
+            returnedDate = x.ReturnedDate,
             status = x.Status
         });
 

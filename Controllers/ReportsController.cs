@@ -1,5 +1,6 @@
 ﻿using AssetHub.Api.Data;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Infrastructure;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,8 +27,9 @@ public class ReportsController : ControllerBase
 
         if (range == "This Year")
         {
-            var year = DateTime.UtcNow.Year;
-            devicesQuery = devicesQuery.Where(x => x.CreatedAt.Year == year);
+            // Calendar year in Egypt, not in UTC.
+            var (startUtc, endUtc) = AppTime.CurrentYearUtc();
+            devicesQuery = devicesQuery.Where(x => x.CreatedAt >= startUtc && x.CreatedAt < endUtc);
         }
 
         var totalDevices = await devicesQuery.CountAsync();

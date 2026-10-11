@@ -1,5 +1,4 @@
 ﻿using AssetHub.Api.Data;
-using AssetHub.Api.Infrastructure;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -80,7 +79,7 @@ public class DashboardController : ControllerBase
             {
                 title = x.Details,
                 user = x.Actor,
-                time = DisplayTime.Format(x.Timestamp, "MMM dd, yyyy HH:mm"),
+                timestamp = x.Timestamp,
                 color = x.LogAction == "Assign" ? "green"
                     : x.LogAction == "Return" ? "blue"
                     : x.LogAction == "Create" ? "purple"
