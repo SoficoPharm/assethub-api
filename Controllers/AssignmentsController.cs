@@ -1,8 +1,9 @@
-﻿using AssetHub.Api.Data;
 using AssetHub.Api.Authorization;
+using AssetHub.Api.Data;
 using AssetHub.Api.DTOs;
-using AssetHub.Api.Services;
+using AssetHub.Api.Infrastructure;
 using AssetHub.Api.Models;
+using AssetHub.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -26,26 +27,27 @@ public class AssignmentsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAssignments()
     {
-        var data = await _context.Assignments
+        var rows = await _context.Assignments
             .AsNoTracking()
             .Include(x => x.User)
             .Include(x => x.Device)
             .OrderByDescending(x => x.Id)
-            .Select(x => new
-            {
-                dbId = x.Id,
-                id = x.AssignmentCode,
-                user = x.User.FullName,
-                initials = GetInitials(x.User.FullName),
-                device = x.Device.DeviceName,
-                model = x.Device.Model,
-                assignedDate = x.AssignedDate.ToString("MMM dd, yyyy"),
-                returnedDate = x.ReturnedDate == null ? "—" : x.ReturnedDate.Value.ToString("MMM dd, yyyy"),
-                assignedDateRaw = x.AssignedDate,
-                returnedDateRaw = x.ReturnedDate,
-                status = x.Status
-            })
             .ToListAsync();
+
+        var data = rows.Select(x => new
+        {
+            dbId = x.Id,
+            id = x.AssignmentCode,
+            user = x.User.FullName,
+            initials = GetInitials(x.User.FullName),
+            device = x.Device.DeviceName,
+            model = x.Device.Model,
+            assignedDate = DisplayTime.Format(x.AssignedDate, "MMM dd, yyyy"),
+            returnedDate = DisplayTime.Format(x.ReturnedDate, "MMM dd, yyyy") ?? "—",
+            assignedDateRaw = x.AssignedDate,
+            returnedDateRaw = x.ReturnedDate,
+            status = x.Status
+        });
 
         return Ok(data);
     }
@@ -54,95 +56,75 @@ public class AssignmentsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> AssignDevice([FromBody] AssignDeviceRequest request)
     {
-        try
+        var user = await _context.Users.FindAsync(request.UserId);
+        var device = await _context.Devices.FindAsync(request.DeviceId);
+
+        if (user == null)
+            return NotFound(new { message = "Employee not found" });
+
+        if (device == null)
+            return NotFound(new { message = "Device not found" });
+
+        if (device.Status != DeviceStatuses.Available)
+            return BadRequest(new { message = "Device is not available" });
+
+        var activeAssignmentExists = await _context.Assignments
+            .AnyAsync(x => x.DeviceId == device.Id && x.Status == AssignmentStatuses.Active);
+
+        if (activeAssignmentExists)
+            return BadRequest(new { message = "This device already has an active assignment" });
+
+        device.Status = DeviceStatuses.Assigned;
+        device.AssignedUserId = user.Id;
+
+        var assignment = new Assignment
         {
-            var user = await _context.Users.FindAsync(request.UserId);
-            var device = await _context.Devices.FindAsync(request.DeviceId);
+            AssignmentCode = await CodeGenerator.NextAsync(_context.Assignments.Select(x => x.AssignmentCode), "ASN-", 3),
+            UserId = user.Id,
+            DeviceId = device.Id,
+            AssignedDate = DateTime.UtcNow,
+            Status = AssignmentStatuses.Active
+        };
 
-            if (user == null)
-                return NotFound(new { message = "User not found" });
+        _context.Assignments.Add(assignment);
 
-            if (device == null)
-                return NotFound(new { message = "Device not found" });
+        _audit.Log(AuditActions.Assign, $"{user.FullName} ({user.EmployeeId})", $"Assigned {device.DeviceName} ({device.DeviceCode})");
 
-            if (device.Status != "Available")
-                return BadRequest(new { message = "Device is not available" });
+        await _context.SaveChangesAsync();
 
-            var activeAssignmentExists = await _context.Assignments
-                .AnyAsync(x => x.DeviceId == device.Id && x.Status == "Active");
-
-            if (activeAssignmentExists)
-                return BadRequest(new { message = "This device already has an active assignment" });
-
-            device.Status = "Assigned";
-            device.AssignedUserId = user.Id;
-
-            var assignment = new Assignment
-            {
-                AssignmentCode = await GenerateAssignmentCode(),
-                UserId = user.Id,
-                DeviceId = device.Id,
-                AssignedDate = DateTime.Now,
-                Status = "Active"
-            };
-
-            _context.Assignments.Add(assignment);
-
-            _audit.Log(AuditActions.Assign, $"{user.FullName} ({user.EmployeeId})", $"Assigned {device.DeviceName} ({device.DeviceCode})");
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                message = "Device assigned successfully",
-                assignment.AssignmentCode
-            });
-        }
-        catch (Exception ex)
+        return Ok(new
         {
-            return BadRequest(new { message = ex.Message });
-        }
+            message = "Device assigned successfully",
+            assignment.AssignmentCode
+        });
     }
 
     [Authorize(Policy = Policies.CanEdit)]
     [HttpPut("{id:int}/return")]
     public async Task<IActionResult> ReturnDevice(int id)
     {
-        try
-        {
-            var assignment = await _context.Assignments
-                .Include(x => x.Device)
-                .Include(x => x.User)
-                .FirstOrDefaultAsync(x => x.Id == id);
+        var assignment = await _context.Assignments
+            .Include(x => x.Device)
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x => x.Id == id);
 
-            if (assignment == null)
-                return NotFound(new { message = "Assignment not found" });
+        if (assignment == null)
+            return NotFound(new { message = "Assignment not found" });
 
-            if (assignment.Status == "Returned")
-                return BadRequest(new { message = "Assignment already returned" });
+        if (assignment.Status == AssignmentStatuses.Returned)
+            return BadRequest(new { message = "Assignment already returned" });
 
-            assignment.Status = "Returned";
-            assignment.ReturnedDate = DateTime.Now;
+        assignment.Status = AssignmentStatuses.Returned;
+        assignment.ReturnedDate = DateTime.UtcNow;
 
-            assignment.Device.Status = "Available";
-            assignment.Device.AssignedUserId = null;
+        assignment.Device.Status = DeviceStatuses.Available;
+        assignment.Device.AssignedUserId = null;
 
-            _audit.Log(AuditActions.Return, $"{assignment.User.FullName} ({assignment.User.EmployeeId})", $"Returned {assignment.Device.DeviceName} ({assignment.Device.DeviceCode})");
+        _audit.Log(AuditActions.Return, $"{assignment.User.FullName} ({assignment.User.EmployeeId})", $"Returned {assignment.Device.DeviceName} ({assignment.Device.DeviceCode})");
 
-            await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Device returned successfully" });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-    }
-
-    private async Task<string> GenerateAssignmentCode()
-    {
-        var count = await _context.Assignments.CountAsync();
-        return $"ASN-{count + 1:000}";
+        return Ok(new { message = "Device returned successfully" });
     }
 
     private static string GetInitials(string? name)

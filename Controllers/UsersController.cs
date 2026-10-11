@@ -1,6 +1,7 @@
 ﻿using AssetHub.Api.Data;
 using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Infrastructure;
 using AssetHub.Api.Services;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -39,7 +40,6 @@ public class UsersController : ControllerBase
                 employeeId = user.EmployeeId,
                 department = user.Department,
                 title = user.JobTitle,
-                role = user.Role,
                 devices = _context.Devices.Count(d => d.AssignedUserId == user.Id),
                 images = user.ImagesCount,
                 imageUrl = user.ImageUrl,
@@ -59,7 +59,7 @@ public class UsersController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == id);
 
         if (user == null)
-            return NotFound(new { message = "User not found" });
+            return NotFound(new { message = "Employee not found" });
 
         return Ok(new
         {
@@ -71,7 +71,6 @@ public class UsersController : ControllerBase
             department = user.Department,
             jobTitle = user.JobTitle,
             title = user.JobTitle,
-            role = user.Role,
             images = user.ImagesCount,
             imageUrl = user.ImageUrl,
             userDomain = user.UserDomain,
@@ -87,7 +86,7 @@ public class UsersController : ControllerBase
             .FirstOrDefaultAsync(x => x.EmployeeId == employeeId);
 
         if (user == null)
-            return NotFound(new { message = "User not found" });
+            return NotFound(new { message = "Employee not found" });
 
         return Ok(new
         {
@@ -99,7 +98,6 @@ public class UsersController : ControllerBase
             department = user.Department,
             jobTitle = user.JobTitle,
             title = user.JobTitle,
-            role = user.Role,
             images = user.ImagesCount,
             imageUrl = user.ImageUrl,
             userDomain = user.UserDomain,
@@ -113,66 +111,57 @@ public class UsersController : ControllerBase
     [RequestSizeLimit(25_000_000)]
     public async Task<IActionResult> CreateUser([FromForm] CreateUserRequest request)
     {
-        try
+        if (string.IsNullOrWhiteSpace(request.FullName))
+            return BadRequest(new { message = "Full name is required" });
+
+        if (string.IsNullOrWhiteSpace(request.Email))
+            return BadRequest(new { message = "Email is required" });
+
+        var emailExists = await _context.Users.AnyAsync(x => x.Email == request.Email.Trim());
+        if (emailExists)
+            return BadRequest(new { message = "Email already exists" });
+
+        var employeeId = string.IsNullOrWhiteSpace(request.EmployeeId)
+            ? await CodeGenerator.NextAsync(_context.Users.Select(x => x.EmployeeId), "EMP-", 3)
+            : request.EmployeeId.Trim();
+
+        var employeeExists = await _context.Users.AnyAsync(x => x.EmployeeId == employeeId);
+        if (employeeExists)
+            return BadRequest(new { message = "Employee ID already exists" });
+
+        var imageUrl = await SaveUserImageAsync(request.ImageFile);
+
+        if (string.IsNullOrWhiteSpace(imageUrl))
+            imageUrl = request.ImageUrl?.Trim();
+
+        var user = new AppUser
         {
-            if (string.IsNullOrWhiteSpace(request.FullName))
-                return BadRequest(new { message = "Full name is required" });
+            FullName = request.FullName.Trim(),
+            UserName = request.Email.Trim().Split('@')[0],
+            Email = request.Email.Trim(),
+            EmployeeId = employeeId,
+            Department = request.Department?.Trim() ?? "",
+            JobTitle = request.JobTitle?.Trim() ?? "",
+            UserDomain = request.UserDomain?.Trim() ?? "",
+            ImagesCount = imageUrl == null ? request.Images : 1,
+            ImageUrl = imageUrl,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
 
-            if (string.IsNullOrWhiteSpace(request.Email))
-                return BadRequest(new { message = "Email is required" });
+        _context.Users.Add(user);
 
-            var emailExists = await _context.Users.AnyAsync(x => x.Email == request.Email.Trim());
-            if (emailExists)
-                return BadRequest(new { message = "Email already exists" });
+        _audit.Log(AuditActions.Create, $"{user.FullName} ({user.EmployeeId})", "Created employee");
 
-            var employeeId = string.IsNullOrWhiteSpace(request.EmployeeId)
-                ? await GenerateEmployeeId()
-                : request.EmployeeId.Trim();
+        await _context.SaveChangesAsync();
 
-            var employeeExists = await _context.Users.AnyAsync(x => x.EmployeeId == employeeId);
-            if (employeeExists)
-                return BadRequest(new { message = "Employee ID already exists" });
-
-            var imageUrl = await SaveUserImageAsync(request.ImageFile);
-
-            if (string.IsNullOrWhiteSpace(imageUrl))
-                imageUrl = request.ImageUrl?.Trim();
-
-            var user = new AppUser
-            {
-                FullName = request.FullName.Trim(),
-                UserName = request.Email.Trim().Split('@')[0],
-                Email = request.Email.Trim(),
-                EmployeeId = employeeId,
-                Department = request.Department?.Trim() ?? "",
-                JobTitle = request.JobTitle?.Trim() ?? "",
-                UserDomain = request.UserDomain?.Trim() ?? "",
-                Role = string.IsNullOrWhiteSpace(request.Role) ? "Viewer" : request.Role.Trim(),
-                ImagesCount = imageUrl == null ? request.Images : 1,
-                ImageUrl = imageUrl,
-                IsActive = true,
-
-                CreatedAt = DateTime.Now
-            };
-
-            _context.Users.Add(user);
-
-            _audit.Log(AuditActions.Create, $"{user.FullName} ({user.EmployeeId})", "Created employee");
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                message = "User created successfully",
-                user.Id,
-                user.EmployeeId,
-                user.ImageUrl
-            });
-        }
-        catch (Exception ex)
+        return Ok(new
         {
-            return BadRequest(new { message = ex.Message });
-        }
+            message = "Employee created successfully",
+            user.Id,
+            user.EmployeeId,
+            user.ImageUrl
+        });
     }
 
     [Authorize(Policy = Policies.CanEdit)]
@@ -181,69 +170,66 @@ public class UsersController : ControllerBase
     [RequestSizeLimit(25_000_000)]
     public async Task<IActionResult> UpdateUser(int id, [FromForm] CreateUserRequest request)
     {
-        try
+        var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == id);
+
+        if (user == null)
+            return NotFound(new { message = "Employee not found" });
+
+        if (string.IsNullOrWhiteSpace(request.FullName))
+            return BadRequest(new { message = "Full name is required" });
+
+        if (string.IsNullOrWhiteSpace(request.Email))
+            return BadRequest(new { message = "Email is required" });
+
+        var emailExists = await _context.Users.AnyAsync(x => x.Email == request.Email.Trim() && x.Id != id);
+        if (emailExists)
+            return BadRequest(new { message = "Email already exists" });
+
+        var employeeId = string.IsNullOrWhiteSpace(request.EmployeeId) ? user.EmployeeId : request.EmployeeId.Trim();
+
+        var employeeExists = await _context.Users.AnyAsync(x => x.EmployeeId == employeeId && x.Id != id);
+        if (employeeExists)
+            return BadRequest(new { message = "Employee ID already exists" });
+
+        var imageUrl = await SaveUserImageAsync(request.ImageFile);
+
+        user.FullName = request.FullName.Trim();
+        user.Email = request.Email.Trim();
+        user.UserName = request.Email.Trim().Split('@')[0];
+        user.EmployeeId = employeeId;
+        user.Department = request.Department?.Trim() ?? "";
+        user.JobTitle = request.JobTitle?.Trim() ?? "";
+        user.UserDomain = request.UserDomain?.Trim() ?? "";
+
+        if (!string.IsNullOrWhiteSpace(imageUrl))
         {
-            var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == id);
-
-            if (user == null)
-                return NotFound(new { message = "User not found" });
-
-            if (string.IsNullOrWhiteSpace(request.FullName))
-                return BadRequest(new { message = "Full name is required" });
-
-            if (string.IsNullOrWhiteSpace(request.Email))
-                return BadRequest(new { message = "Email is required" });
-
-            var emailExists = await _context.Users.AnyAsync(x => x.Email == request.Email.Trim() && x.Id != id);
-            if (emailExists)
-                return BadRequest(new { message = "Email already exists" });
-
-            var imageUrl = await SaveUserImageAsync(request.ImageFile);
-
-            user.FullName = request.FullName.Trim();
-            user.Email = request.Email.Trim();
-            user.UserName = request.Email.Trim().Split('@')[0];
-            user.EmployeeId = string.IsNullOrWhiteSpace(request.EmployeeId)
-                ? user.EmployeeId
-                : request.EmployeeId.Trim();
-            user.Department = request.Department?.Trim() ?? "";
-            user.JobTitle = request.JobTitle?.Trim() ?? "";
-            user.UserDomain = request.UserDomain?.Trim() ?? "";
-            user.Role = string.IsNullOrWhiteSpace(request.Role) ? "Viewer" : request.Role.Trim();
-
-            if (!string.IsNullOrWhiteSpace(imageUrl))
-            {
-                user.ImageUrl = imageUrl;
-                user.ImagesCount = 1;
-            }
-            else if (!string.IsNullOrWhiteSpace(request.ImageUrl))
-            {
-                user.ImageUrl = request.ImageUrl.Trim();
-                user.ImagesCount = 1;
-            }
-            else
-            {
-                user.ImageUrl = null;
-                user.ImagesCount = 0;
-            }
-
-            _audit.Log(AuditActions.Update, $"{user.FullName} ({user.EmployeeId})", "Updated employee");
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                message = "User updated successfully",
-                user.Id,
-                user.EmployeeId,
-                user.ImageUrl
-            });
+            user.ImageUrl = imageUrl;
+            user.ImagesCount = 1;
         }
-        catch (Exception ex)
+        else if (!string.IsNullOrWhiteSpace(request.ImageUrl))
         {
-            return BadRequest(new { message = ex.Message });
+            user.ImageUrl = request.ImageUrl.Trim();
+            user.ImagesCount = 1;
         }
+        else
+        {
+            user.ImageUrl = null;
+            user.ImagesCount = 0;
+        }
+
+        _audit.Log(AuditActions.Update, $"{user.FullName} ({user.EmployeeId})", "Updated employee");
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Employee updated successfully",
+            user.Id,
+            user.EmployeeId,
+            user.ImageUrl
+        });
     }
+
     [Authorize(Policy = Policies.CanEdit)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteUser(int id)
@@ -251,23 +237,14 @@ public class UsersController : ControllerBase
         var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == id);
 
         if (user == null)
-            return NotFound(new { message = "User not found" });
+            return NotFound(new { message = "Employee not found" });
 
-        var assignments = await _context.Assignments
-            .Where(x => x.UserId == id)
-            .ToListAsync();
+        // Assignment history is never deleted.
+        var hasHistory = await _context.Assignments.AnyAsync(x => x.UserId == id)
+                         || await _context.Devices.AnyAsync(x => x.AssignedUserId == id);
 
-        _context.Assignments.RemoveRange(assignments);
-
-        var assignedDevices = await _context.Devices
-            .Where(x => x.AssignedUserId == id)
-            .ToListAsync();
-
-        foreach (var device in assignedDevices)
-        {
-            device.AssignedUserId = null;
-            device.Status = "Available";
-        }
+        if (hasHistory)
+            return Conflict(new { message = "This employee has assignment history and cannot be deleted. Return their devices instead." });
 
         _context.Users.Remove(user);
 
@@ -275,7 +252,7 @@ public class UsersController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "User deleted successfully" });
+        return Ok(new { message = "Employee deleted successfully" });
     }
 
     private async Task<string?> SaveUserImageAsync(IFormFile? file)
@@ -287,7 +264,7 @@ public class UsersController : ControllerBase
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
 
         if (!allowedExtensions.Contains(extension))
-            throw new InvalidOperationException("Invalid image type");
+            throw new ApiException(StatusCodes.Status400BadRequest, "Invalid image type");
 
         var webRoot = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
         var folder = Path.Combine(webRoot, "uploads", "users");
@@ -302,12 +279,6 @@ public class UsersController : ControllerBase
 
         var request = HttpContext.Request;
         return $"{request.Scheme}://{request.Host}/uploads/users/{fileName}";
-    }
-
-    private async Task<string> GenerateEmployeeId()
-    {
-        var count = await _context.Users.CountAsync();
-        return $"EMP-{count + 1:000}";
     }
 
     private static string GetInitials(string? name)

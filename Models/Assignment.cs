@@ -12,8 +12,8 @@ public class Assignment
     public int DeviceId { get; set; }
     public Device Device { get; set; } = null!;
 
-    public DateTime AssignedDate { get; set; } = DateTime.Now;
+    public DateTime AssignedDate { get; set; } = DateTime.UtcNow;
     public DateTime? ReturnedDate { get; set; }
 
-    public string Status { get; set; } = "Active";
+    public string Status { get; set; } = AssignmentStatuses.Active;
 }

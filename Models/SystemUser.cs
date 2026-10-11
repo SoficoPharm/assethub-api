@@ -15,5 +15,5 @@ public class SystemUser
     public string Role { get; set; } = Roles.Viewer;
 
     public bool IsActive { get; set; } = true;
-    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

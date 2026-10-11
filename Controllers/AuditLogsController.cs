@@ -1,6 +1,7 @@
 ﻿using AssetHub.Api.Data;
 using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Infrastructure;
 using AssetHub.Api.Services;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -55,7 +56,7 @@ public class AuditLogsController : ControllerBase
             {
                 Id = x.Id,
                 Timestamp = x.Timestamp,
-                TimestampText = x.Timestamp.ToString("MMM dd, yyyy HH:mm"),
+                TimestampText = DisplayTime.Format(x.Timestamp, "MMM dd, yyyy HH:mm"),
                 Actor = x.Actor,
                 LogAction = x.LogAction,
                 Target = x.Target,
@@ -76,7 +77,7 @@ public class AuditLogsController : ControllerBase
             {
                 Id = x.Id,
                 Timestamp = x.Timestamp,
-                TimestampText = x.Timestamp.ToString("MMM dd, yyyy HH:mm"),
+                TimestampText = DisplayTime.Format(x.Timestamp, "MMM dd, yyyy HH:mm"),
                 Actor = x.Actor,
                 LogAction = x.LogAction,
                 Target = x.Target,

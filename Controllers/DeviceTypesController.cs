@@ -110,7 +110,6 @@ public class DeviceTypesController : ControllerBase
         foreach (var device in devices)
         {
             device.DeviceType = newName;
-            device.Platform = newName;
         }
 
         _audit.Log(AuditActions.Update, newName, $"Updated device type {oldName} to {newName}");

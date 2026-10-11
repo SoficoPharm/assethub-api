@@ -15,7 +15,7 @@ public class AppUser
     public string? ImageUrl { get; set; }
     public string Role { get; set; } = "Standard User";
     public bool IsActive { get; set; } = true;
-    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public string UserDomain { get; set; } = string.Empty;
 }

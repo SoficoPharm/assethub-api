@@ -1,9 +1,11 @@
 using AssetHub.Api.Authorization;
 using AssetHub.Api.Data;
+using AssetHub.Api.Infrastructure;
 using AssetHub.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Security.Claims;
 using System.Text;
 
@@ -25,6 +27,7 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins(
+                "http://localhost:4200",
                 "http://localhost:4300",
                 "http://localhost",
                 "http://10.100.1.82",
@@ -104,9 +107,26 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    var scheme = new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Description = "Paste the token from POST /api/Auth/login (without the \"Bearer \" prefix).",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = JwtBearerDefaults.AuthenticationScheme }
+    };
+
+    options.AddSecurityDefinition(JwtBearerDefaults.AuthenticationScheme, scheme);
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement { [scheme] = Array.Empty<string>() });
+});
 
 var app = builder.Build();
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 var uploadsRoot = Path.Combine(app.Environment.WebRootPath ?? "wwwroot", "uploads");
 Directory.CreateDirectory(uploadsRoot);

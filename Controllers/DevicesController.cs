@@ -1,6 +1,7 @@
 ﻿using AssetHub.Api.Data;
 using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Infrastructure;
 using AssetHub.Api.Services;
 using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -70,7 +71,7 @@ public class DevicesController : ControllerBase
     {
         var devices = await _context.Devices
             .AsNoTracking()
-            .Where(x => x.Status == "Available")
+            .Where(x => x.Status == DeviceStatuses.Available)
             .OrderBy(x => x.DeviceName)
             .Select(device => new
             {
@@ -147,61 +148,59 @@ public class DevicesController : ControllerBase
     [RequestSizeLimit(25_000_000)]
     public async Task<IActionResult> CreateDevice([FromForm] CreateDeviceRequest request)
     {
-        try
+        if (string.IsNullOrWhiteSpace(request.DeviceName))
+            return BadRequest(new { message = "Device name is required" });
+
+        var status = string.IsNullOrWhiteSpace(request.Status) ? DeviceStatuses.Available : request.Status.Trim();
+
+        if (!DeviceStatuses.Editable.Contains(status))
+            return BadRequest(new { message = $"Status must be one of: {string.Join(", ", DeviceStatuses.Editable)}. Use Assignments to assign a device." });
+
+        var imageUrl = await SaveDeviceImageAsync(request.ImageFile);
+
+        if (string.IsNullOrWhiteSpace(imageUrl))
+            imageUrl = request.ImageUrl?.Trim();
+
+        var device = new Device
         {
-            if (string.IsNullOrWhiteSpace(request.DeviceName))
-                return BadRequest(new { message = "Device name is required" });
+            DeviceCode = await CodeGenerator.NextAsync(_context.Devices.Select(x => x.DeviceCode), "DEV-", 4),
+            DeviceName = request.DeviceName.Trim(),
+            ImeiSerial = request.ImeiSerial?.Trim(),
+            SerialNumber = request.SerialNumber?.Trim(),
+            DeviceType = request.DeviceType?.Trim() ?? "",
+            Platform = string.IsNullOrWhiteSpace(request.Platform)
+                ? request.DeviceType?.Trim() ?? ""
+                : request.Platform.Trim(),
+            Brand = request.Brand?.Trim() ?? "",
+            Model = request.Model?.Trim() ?? "",
+            Ram = request.Ram?.Trim() ?? "",
+            Storage = request.Storage?.Trim() ?? "",
+            Storage1 = request.Storage1?.Trim(),
+            Storage2 = request.Storage2?.Trim(),
+            Cpu = request.Cpu?.Trim(),
+            Gpu = request.Gpu?.Trim(),
+            Screens = request.Screens,
+            Printer = request.Printer,
+            Scanner = request.Scanner,
+            Status = status,
+            Notes = request.Notes?.Trim() ?? "",
+            InternalNotes = request.InternalNotes?.Trim(),
+            ImageUrl = imageUrl,
+            CreatedAt = DateTime.UtcNow
+        };
 
-            var imageUrl = await SaveDeviceImageAsync(request.ImageFile);
+        _context.Devices.Add(device);
 
-            if (string.IsNullOrWhiteSpace(imageUrl))
-                imageUrl = request.ImageUrl?.Trim();
+        _audit.Log(AuditActions.Create, $"{device.DeviceName} ({device.DeviceCode})", $"Added device {device.DeviceName}");
 
-            var device = new Device
-            {
-                DeviceCode = await GenerateDeviceCode(),
-                DeviceName = request.DeviceName.Trim(),
-                ImeiSerial = request.ImeiSerial?.Trim(),
-                SerialNumber = request.SerialNumber?.Trim(),
-                DeviceType = request.DeviceType?.Trim() ?? "",
-                Platform = string.IsNullOrWhiteSpace(request.Platform)
-                    ? request.DeviceType?.Trim() ?? ""
-                    : request.Platform.Trim(),
-                Brand = request.Brand?.Trim() ?? "",
-                Model = request.Model?.Trim() ?? "",
-                Ram = request.Ram?.Trim() ?? "",
-                Storage = request.Storage?.Trim() ?? "",
-                Storage1 = request.Storage1?.Trim(),
-                Storage2 = request.Storage2?.Trim(),
-                Cpu = request.Cpu?.Trim(),
-                Gpu = request.Gpu?.Trim(),
-                Screens = request.Screens,
-                Printer = request.Printer,
-                Scanner = request.Scanner,
-                Status = string.IsNullOrWhiteSpace(request.Status) ? "Available" : request.Status.Trim(),
-                Notes = request.Notes?.Trim() ?? "",
-                InternalNotes = request.InternalNotes?.Trim(),
-                ImageUrl = imageUrl,
-                CreatedAt = DateTime.Now
-            };
+        await _context.SaveChangesAsync();
 
-            _context.Devices.Add(device);
-
-            _audit.Log(AuditActions.Create, $"{device.DeviceName} ({device.DeviceCode})", $"Added device {device.DeviceName}");
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                message = "Device created successfully",
-                device.DeviceCode,
-                device.ImageUrl
-            });
-        }
-        catch (Exception ex)
+        return Ok(new
         {
-            return BadRequest(new { message = ex.Message });
-        }
+            message = "Device created successfully",
+            device.DeviceCode,
+            device.ImageUrl
+        });
     }
 
     [Authorize(Policy = Policies.CanEdit)]
@@ -210,76 +209,79 @@ public class DevicesController : ControllerBase
     [RequestSizeLimit(25_000_000)]
     public async Task<IActionResult> UpdateDeviceByCode(string code, [FromForm] CreateDeviceRequest request)
     {
-        try
-        {
-            var device = await _context.Devices.FirstOrDefaultAsync(x => x.DeviceCode == code);
-
-            if (device == null)
-                return NotFound(new { message = "Device not found" });
-
-            var imageUrl = await SaveDeviceImageAsync(request.ImageFile);
-
-            device.DeviceName = request.DeviceName?.Trim() ?? device.DeviceName;
-            device.ImeiSerial = request.ImeiSerial?.Trim();
-            device.SerialNumber = request.SerialNumber?.Trim();
-            device.DeviceType = request.DeviceType?.Trim() ?? "";
-            device.Platform = string.IsNullOrWhiteSpace(request.Platform)
-                ? request.DeviceType?.Trim() ?? ""
-                : request.Platform.Trim();
-            device.Brand = request.Brand?.Trim() ?? "";
-            device.Model = request.Model?.Trim() ?? "";
-            device.Ram = request.Ram?.Trim() ?? "";
-            device.Storage = request.Storage?.Trim() ?? "";
-            device.Storage1 = request.Storage1?.Trim();
-            device.Storage2 = request.Storage2?.Trim();
-            device.Cpu = request.Cpu?.Trim();
-            device.Gpu = request.Gpu?.Trim();
-            device.Screens = request.Screens;
-            device.Printer = request.Printer;
-            device.Scanner = request.Scanner;
-            device.Status = string.IsNullOrWhiteSpace(request.Status) ? "Available" : request.Status.Trim();
-            device.Notes = request.Notes?.Trim() ?? "";
-            device.InternalNotes = request.InternalNotes?.Trim();
-
-            if (!string.IsNullOrWhiteSpace(imageUrl))
-                device.ImageUrl = imageUrl;
-            else if (!string.IsNullOrWhiteSpace(request.ImageUrl))
-                device.ImageUrl = request.ImageUrl.Trim();
-
-            if (device.Status is "Available" or "Maintenance" or "Inactive" or "Lost")
-                device.AssignedUserId = null;
-
-            _audit.Log(AuditActions.Update, $"{device.DeviceName} ({device.DeviceCode})", $"Updated device {device.DeviceName}");
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                message = "Device updated successfully",
-                device.ImageUrl
-            });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-    }
-
-    [Authorize(Policy = Policies.CanEdit)]
-    [HttpPut("{id}/status")]
-    public async Task<IActionResult> UpdateStatus(int id, [FromBody] string status)
-    {
-        var device = await _context.Devices.FindAsync(id);
+        var device = await _context.Devices
+            .Include(x => x.AssignedUser)
+            .FirstOrDefaultAsync(x => x.DeviceCode == code);
 
         if (device == null)
             return NotFound(new { message = "Device not found" });
 
-        device.Status = status;
+        if (string.IsNullOrWhiteSpace(request.DeviceName))
+            return BadRequest(new { message = "Device name is required" });
 
-        if (status is "Available" or "Maintenance" or "Inactive" or "Lost")
-            device.AssignedUserId = null;
+        var status = string.IsNullOrWhiteSpace(request.Status) ? device.Status : request.Status.Trim();
+        var statusError = await ApplyStatusChangeAsync(device, status);
+        if (statusError != null)
+            return BadRequest(new { message = statusError });
 
-        _audit.Log(status == "Lost" ? AuditActions.Alert : AuditActions.Update, $"{device.DeviceName} ({device.DeviceCode})", $"Changed device status to {status}");
+        var imageUrl = await SaveDeviceImageAsync(request.ImageFile);
+
+        device.DeviceName = request.DeviceName.Trim();
+        device.ImeiSerial = request.ImeiSerial?.Trim();
+        device.SerialNumber = request.SerialNumber?.Trim();
+        device.DeviceType = request.DeviceType?.Trim() ?? "";
+        device.Platform = string.IsNullOrWhiteSpace(request.Platform)
+            ? request.DeviceType?.Trim() ?? ""
+            : request.Platform.Trim();
+        device.Brand = request.Brand?.Trim() ?? "";
+        device.Model = request.Model?.Trim() ?? "";
+        device.Ram = request.Ram?.Trim() ?? "";
+        device.Storage = request.Storage?.Trim() ?? "";
+        device.Storage1 = request.Storage1?.Trim();
+        device.Storage2 = request.Storage2?.Trim();
+        device.Cpu = request.Cpu?.Trim();
+        device.Gpu = request.Gpu?.Trim();
+        device.Screens = request.Screens;
+        device.Printer = request.Printer;
+        device.Scanner = request.Scanner;
+        device.Notes = request.Notes?.Trim() ?? "";
+        device.InternalNotes = request.InternalNotes?.Trim();
+
+        if (!string.IsNullOrWhiteSpace(imageUrl))
+            device.ImageUrl = imageUrl;
+        else if (!string.IsNullOrWhiteSpace(request.ImageUrl))
+            device.ImageUrl = request.ImageUrl.Trim();
+
+        _audit.Log(AuditActions.Update, $"{device.DeviceName} ({device.DeviceCode})", $"Updated device {device.DeviceName}");
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Device updated successfully",
+            device.ImageUrl
+        });
+    }
+
+    [Authorize(Policy = Policies.CanEdit)]
+    [HttpPut("{id:int}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] string status)
+    {
+        var device = await _context.Devices
+            .Include(x => x.AssignedUser)
+            .FirstOrDefaultAsync(x => x.Id == id);
+
+        if (device == null)
+            return NotFound(new { message = "Device not found" });
+
+        var statusError = await ApplyStatusChangeAsync(device, status?.Trim() ?? "");
+        if (statusError != null)
+            return BadRequest(new { message = statusError });
+
+        _audit.Log(
+            device.Status == DeviceStatuses.Lost ? AuditActions.Alert : AuditActions.Update,
+            $"{device.DeviceName} ({device.DeviceCode})",
+            $"Changed device status to {device.Status}");
 
         await _context.SaveChangesAsync();
 
@@ -295,6 +297,9 @@ public class DevicesController : ControllerBase
         if (device == null)
             return NotFound(new { message = "Device not found" });
 
+        if (await _context.Assignments.AnyAsync(x => x.DeviceId == device.Id))
+            return Conflict(new { message = "This device has assignment history and cannot be deleted. Set its status to Inactive instead." });
+
         _context.Devices.Remove(device);
 
         _audit.Log(AuditActions.Delete, $"{device.DeviceName} ({device.DeviceCode})", $"Deleted device {device.DeviceName}");
@@ -302,6 +307,45 @@ public class DevicesController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Device deleted successfully" });
+    }
+
+    /// <summary>
+    /// Applies a status change without saving. Assigned can only be entered through
+    /// Assignments; leaving Assigned closes the active assignment so both stay in sync.
+    /// Returns an error message, or null on success.
+    /// </summary>
+    private async Task<string?> ApplyStatusChangeAsync(Device device, string newStatus)
+    {
+        if (newStatus == device.Status)
+            return null;
+
+        if (!DeviceStatuses.All.Contains(newStatus))
+            return $"Status must be one of: {string.Join(", ", DeviceStatuses.Editable)}";
+
+        if (newStatus == DeviceStatuses.Assigned)
+            return "Use Assignments to assign a device to an employee.";
+
+        if (device.Status == DeviceStatuses.Assigned)
+        {
+            var activeAssignment = await _context.Assignments
+                .FirstOrDefaultAsync(x => x.DeviceId == device.Id && x.Status == AssignmentStatuses.Active);
+
+            if (activeAssignment != null)
+            {
+                activeAssignment.Status = AssignmentStatuses.Returned;
+                activeAssignment.ReturnedDate = DateTime.UtcNow;
+
+                _audit.Log(
+                    AuditActions.Return,
+                    $"{device.AssignedUser?.FullName} ({device.AssignedUser?.EmployeeId})",
+                    $"Returned {device.DeviceName} ({device.DeviceCode}) by changing its status to {newStatus}");
+            }
+        }
+
+        device.Status = newStatus;
+        device.AssignedUserId = null;
+
+        return null;
     }
 
     private async Task<string?> SaveDeviceImageAsync(IFormFile? file)
@@ -313,7 +357,7 @@ public class DevicesController : ControllerBase
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
 
         if (!allowedExtensions.Contains(extension))
-            throw new InvalidOperationException("Invalid image type");
+            throw new ApiException(StatusCodes.Status400BadRequest, "Invalid image type");
 
         var webRoot = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
         var folder = Path.Combine(webRoot, "uploads", "devices");
@@ -328,19 +372,6 @@ public class DevicesController : ControllerBase
 
         var request = HttpContext.Request;
         return $"{request.Scheme}://{request.Host}/uploads/devices/{fileName}";
-    }
-
-    private async Task<string> GenerateDeviceCode()
-    {
-        var lastDevice = await _context.Devices
-            .AsNoTracking()
-            .OrderByDescending(x => x.Id)
-            .FirstOrDefaultAsync();
-
-        if (lastDevice == null)
-            return "DEV-0001";
-
-        return $"DEV-{lastDevice.Id + 1:0000}";
     }
 
     private static string GetInitials(string? name)

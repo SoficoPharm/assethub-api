@@ -1,6 +1,7 @@
 ﻿using AssetHub.Api.Models;
 using AssetHub.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AssetHub.Api.Data;
 
@@ -38,5 +39,18 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(x => x.DeviceId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // All timestamps are stored in UTC. SQL Server's datetime2 has no kind, so mark
+        // values read back as UTC; JSON then serializes them with a trailing "Z".
+        var utcConverter = new ValueConverter<DateTime, DateTime>(
+            v => v,
+            v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+        foreach (var property in modelBuilder.Model.GetEntityTypes()
+                     .SelectMany(t => t.GetProperties())
+                     .Where(p => p.ClrType == typeof(DateTime) || p.ClrType == typeof(DateTime?)))
+        {
+            property.SetValueConverter(utcConverter);
+        }
     }
 }

@@ -26,7 +26,7 @@ public class Device
     public bool Printer { get; set; } = false;
     public bool Scanner { get; set; } = false;
 
-    public string Status { get; set; } = "Available";
+    public string Status { get; set; } = DeviceStatuses.Available;
     public string Notes { get; set; } = string.Empty;
     public string? InternalNotes { get; set; }
     public string? ImageUrl { get; set; }
@@ -34,5 +34,5 @@ public class Device
     public int? AssignedUserId { get; set; }
     public AppUser? AssignedUser { get; set; }
 
-    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

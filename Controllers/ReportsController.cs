@@ -1,5 +1,6 @@
 ﻿using AssetHub.Api.Data;
 using AssetHub.Api.DTOs;
+using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,23 +26,23 @@ public class ReportsController : ControllerBase
 
         if (range == "This Year")
         {
-            var year = DateTime.Now.Year;
+            var year = DateTime.UtcNow.Year;
             devicesQuery = devicesQuery.Where(x => x.CreatedAt.Year == year);
         }
 
         var totalDevices = await devicesQuery.CountAsync();
 
         var assigned = await devicesQuery
-            .CountAsync(x => x.Status == "Assigned" || x.Status == "Active");
+            .CountAsync(x => x.Status == DeviceStatuses.Assigned);
 
         var available = await devicesQuery
-            .CountAsync(x => x.Status == "Available");
+            .CountAsync(x => x.Status == DeviceStatuses.Available);
 
         var maintenance = await devicesQuery
-            .CountAsync(x => x.Status == "Maintenance");
+            .CountAsync(x => x.Status == DeviceStatuses.Maintenance);
 
         var inactiveLost = await devicesQuery
-            .CountAsync(x => x.Status == "Inactive" || x.Status == "Lost");
+            .CountAsync(x => x.Status == DeviceStatuses.Inactive || x.Status == DeviceStatuses.Lost);
 
         var devicesPerType = await devicesQuery
             .GroupBy(x => string.IsNullOrWhiteSpace(x.DeviceType) ? "N/A" : x.DeviceType)
@@ -53,8 +54,7 @@ public class ReportsController : ControllerBase
             .OrderByDescending(x => x.Value)
             .ToListAsync();
 
-        var devicesPerDepartment = await _context.Devices
-            .AsNoTracking()
+        var devicesPerDepartment = await devicesQuery
             .Include(x => x.AssignedUser)
             .Where(x => x.AssignedUser != null)
             .GroupBy(x => string.IsNullOrWhiteSpace(x.AssignedUser!.Department) ? "N/A" : x.AssignedUser!.Department)

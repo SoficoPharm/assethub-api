@@ -1,4 +1,6 @@
 ﻿using AssetHub.Api.Data;
+using AssetHub.Api.Infrastructure;
+using AssetHub.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -41,10 +43,10 @@ public class DashboardController : ControllerBase
                 .Sum(x => x.Count);
         }
 
-        var assigned = GetStatusCount("Assigned", "Active");
-        var available = GetStatusCount("Available");
-        var maintenance = GetStatusCount("Maintenance");
-        var inactiveLost = GetStatusCount("Inactive", "Lost");
+        var assigned = GetStatusCount(DeviceStatuses.Assigned);
+        var available = GetStatusCount(DeviceStatuses.Available);
+        var maintenance = GetStatusCount(DeviceStatuses.Maintenance);
+        var inactiveLost = GetStatusCount(DeviceStatuses.Inactive, DeviceStatuses.Lost);
 
         var totalUsers = await _context.Users
             .AsNoTracking()
@@ -78,7 +80,7 @@ public class DashboardController : ControllerBase
             {
                 title = x.Details,
                 user = x.Actor,
-                time = x.Timestamp.ToString("MMM dd, yyyy HH:mm"),
+                time = DisplayTime.Format(x.Timestamp, "MMM dd, yyyy HH:mm"),
                 color = x.LogAction == "Assign" ? "green"
                     : x.LogAction == "Return" ? "blue"
                     : x.LogAction == "Create" ? "purple"
@@ -96,7 +98,7 @@ public class DashboardController : ControllerBase
                 new { label = "Available", value = available.ToString("N0"), icon = "clipboard", iconClass = "gray" },
                 new { label = "Maintenance", value = maintenance.ToString("N0"), icon = "tool", iconClass = "orange" },
                 new { label = "Inactive/Lost", value = inactiveLost.ToString("N0"), icon = "warning", iconClass = "amber" },
-                new { label = "Total Users", value = totalUsers.ToString("N0"), icon = "users", iconClass = "purple" }
+                new { label = "Total Employees", value = totalUsers.ToString("N0"), icon = "users", iconClass = "purple" }
             },
             devicesByType,
             devicesByPlatform,

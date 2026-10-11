@@ -9,7 +9,6 @@ public class CreateUserRequest
     public string EmployeeId { get; set; } = string.Empty;
     public string Department { get; set; } = string.Empty;
     public string JobTitle { get; set; } = string.Empty;
-    public string Role { get; set; } = "Viewer";
     public int Images { get; set; }
 
     public string? ImageUrl { get; set; }
