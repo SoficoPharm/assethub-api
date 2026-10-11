@@ -35,8 +35,9 @@ public class AuthController : ControllerBase
         if (user == null || !PasswordHasher.Verify(request.Password, user.Password, out var needsRehash))
             return Unauthorized(new { message = "Invalid username or password" });
 
+        // Checked only after a correct password, so it does not reveal which user names exist.
         if (!user.IsActive)
-            return Unauthorized(new { message = "User is inactive" });
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Your account is disabled. Contact the IT Helpdesk." });
 
         // Lazy migration: legacy plaintext passwords are hashed on first successful login.
         if (needsRehash)
