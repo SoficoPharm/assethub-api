@@ -44,6 +44,7 @@ public class UsersController : ControllerBase
                 images = user.ImagesCount,
                 imageUrl = user.ImageUrl,
                 userDomain = user.UserDomain,
+                isActive = user.IsActive,
                 initials = GetInitials(user.FullName)
             })
             .ToListAsync();
@@ -74,6 +75,7 @@ public class UsersController : ControllerBase
             images = user.ImagesCount,
             imageUrl = user.ImageUrl,
             userDomain = user.UserDomain,
+            isActive = user.IsActive,
             initials = GetInitials(user.FullName)
         });
     }
@@ -101,6 +103,7 @@ public class UsersController : ControllerBase
             images = user.ImagesCount,
             imageUrl = user.ImageUrl,
             userDomain = user.UserDomain,
+            isActive = user.IsActive,
             initials = GetInitials(user.FullName)
         });
     }
@@ -231,6 +234,41 @@ public class UsersController : ControllerBase
     }
 
     [Authorize(Policy = Policies.CanEdit)]
+    [HttpPut("{id:int}/toggle-active")]
+    public async Task<IActionResult> ToggleActive(int id)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == id);
+
+        if (user == null)
+            return NotFound(new { message = "Employee not found" });
+
+        if (user.IsActive)
+        {
+            var holdsDevices = await _context.Assignments.AnyAsync(x => x.UserId == id && x.Status == AssignmentStatuses.Active)
+                               || await _context.Devices.AnyAsync(x => x.AssignedUserId == id);
+
+            if (holdsDevices)
+                return Conflict(new { message = "This employee still has assigned devices. Return their devices first." });
+        }
+
+        user.IsActive = !user.IsActive;
+
+        _audit.Log(
+            AuditActions.Update,
+            $"{user.FullName} ({user.EmployeeId})",
+            user.IsActive ? "Activated employee" : "Deactivated employee");
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = user.IsActive ? "Employee activated" : "Employee deactivated",
+            user.Id,
+            isActive = user.IsActive
+        });
+    }
+
+    [Authorize(Policy = Policies.CanEdit)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteUser(int id)
     {
@@ -244,7 +282,7 @@ public class UsersController : ControllerBase
                          || await _context.Devices.AnyAsync(x => x.AssignedUserId == id);
 
         if (hasHistory)
-            return Conflict(new { message = "This employee has assignment history and cannot be deleted. Return their devices instead." });
+            return Conflict(new { message = "This employee has assignment history and cannot be deleted. Deactivate them instead." });
 
         _context.Users.Remove(user);
 

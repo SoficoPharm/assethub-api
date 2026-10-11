@@ -63,6 +63,9 @@ public class AssignmentsController : ControllerBase
         if (device == null)
             return NotFound(new { message = "Device not found" });
 
+        if (!user.IsActive)
+            return BadRequest(new { message = "This employee is inactive and cannot receive devices" });
+
         if (device.Status != DeviceStatuses.Available)
             return BadRequest(new { message = "Device is not available" });
 
