@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# Runtime user uploads (data, not source)
+wwwroot/uploads/
+
+# Local secrets (JWT key, seed credentials). See appsettings.Development.example.json
+appsettings.Development.json

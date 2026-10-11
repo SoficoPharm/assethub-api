@@ -1,0 +1,157 @@
+﻿using AssetHub.Api.Data;
+using AssetHub.Api.Models;
+using AssetHub.Api.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using AssetHub.DTOs;
+using AssetHub.Models;
+
+namespace AssetHub.Api.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class DepartmentsController : ControllerBase
+{
+    private readonly AppDbContext _context;
+
+    public DepartmentsController(AppDbContext context)
+    {
+        _context = context;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetDepartments()
+    {
+        var departments = await _context.Departments
+            .AsNoTracking()
+            .OrderBy(x => x.DepartmentName)
+            .Select(x => new DepartmentDto
+            {
+                Id = x.Id,
+                DepartmentName = x.DepartmentName,
+                ManagerName = x.ManagerName,
+                MembersCount = _context.Users.Count(u => u.Department == x.DepartmentName)
+            })
+            .ToListAsync();
+
+        return Ok(departments);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateDepartment([FromBody] CreateDepartmentDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.DepartmentName))
+            return BadRequest(new { message = "Department name is required" });
+
+        var name = dto.DepartmentName.Trim();
+
+        var exists = await _context.Departments
+            .AnyAsync(x => x.DepartmentName.ToLower() == name.ToLower());
+
+        if (exists)
+            return BadRequest(new { message = "Department already exists" });
+
+        var department = new Department
+        {
+            DepartmentName = name,
+            ManagerName = dto.ManagerName?.Trim() ?? "",
+            MembersCount = 0
+        };
+
+        _context.Departments.Add(department);
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Actor = "Admin User",
+            LogAction = "Create",
+            Target = name,
+            Details = $"Created department {name}",
+            Timestamp = DateTime.Now
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new DepartmentDto
+        {
+            Id = department.Id,
+            DepartmentName = department.DepartmentName,
+            ManagerName = department.ManagerName,
+            MembersCount = 0
+        });
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> UpdateDepartment(int id, [FromBody] UpdateDepartmentDto dto)
+    {
+        var department = await _context.Departments.FindAsync(id);
+
+        if (department == null)
+            return NotFound(new { message = "Department not found" });
+
+        if (string.IsNullOrWhiteSpace(dto.DepartmentName))
+            return BadRequest(new { message = "Department name is required" });
+
+        var oldName = department.DepartmentName;
+        var newName = dto.DepartmentName.Trim();
+
+        var exists = await _context.Departments
+            .AnyAsync(x => x.Id != id && x.DepartmentName.ToLower() == newName.ToLower());
+
+        if (exists)
+            return BadRequest(new { message = "Department already exists" });
+
+        department.DepartmentName = newName;
+        department.ManagerName = dto.ManagerName?.Trim() ?? "";
+
+        var users = await _context.Users
+            .Where(u => u.Department == oldName)
+            .ToListAsync();
+
+        foreach (var user in users)
+            user.Department = newName;
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Actor = "Admin User",
+            LogAction = "Update",
+            Target = newName,
+            Details = $"Updated department {oldName} to {newName}",
+            Timestamp = DateTime.Now
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Department updated successfully" });
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteDepartment(int id)
+    {
+        var department = await _context.Departments.FindAsync(id);
+
+        if (department == null)
+            return NotFound(new { message = "Department not found" });
+
+        var hasUsers = await _context.Users.AnyAsync(u => u.Department == department.DepartmentName);
+
+        if (hasUsers)
+            return BadRequest(new { message = "Cannot delete department because it has users" });
+
+        _context.Departments.Remove(department);
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Actor = "Admin User",
+            LogAction = "Delete",
+            Target = department.DepartmentName,
+            Details = $"Deleted department {department.DepartmentName}",
+            Timestamp = DateTime.Now
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Department deleted successfully" });
+    }
+}
