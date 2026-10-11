@@ -2,19 +2,20 @@
 
 namespace AssetHub.Api.DTOs;
 
+/// <summary>Multipart form. Optional fields are nullable; see CreateUserRequest.</summary>
 public class CreateDeviceRequest
 {
-    public string DeviceName { get; set; } = string.Empty;
+    public string? DeviceName { get; set; }
 
     public string? ImeiSerial { get; set; }
     public string? SerialNumber { get; set; }
 
-    public string DeviceType { get; set; } = string.Empty;
+    public string? DeviceType { get; set; }
     public string? Platform { get; set; }
 
-    public string Brand { get; set; } = string.Empty;
-    public string Model { get; set; } = string.Empty;
-    public string Ram { get; set; } = string.Empty;
+    public string? Brand { get; set; }
+    public string? Model { get; set; }
+    public string? Ram { get; set; }
 
     public string? Storage { get; set; }
     public string? Storage1 { get; set; }
@@ -26,7 +27,7 @@ public class CreateDeviceRequest
     public bool Printer { get; set; }
     public bool Scanner { get; set; }
 
-    public string Status { get; set; } = "Available";
+    public string? Status { get; set; }
     public string? Notes { get; set; }
     public string? InternalNotes { get; set; }
 
