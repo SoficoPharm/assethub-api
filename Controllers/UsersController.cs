@@ -137,7 +137,6 @@ public class UsersController : ControllerBase
             {
                 FullName = request.FullName.Trim(),
                 UserName = request.Email.Trim().Split('@')[0],
-                Password = "123456",
                 Email = request.Email.Trim(),
                 EmployeeId = employeeId,
                 Department = request.Department?.Trim() ?? "",

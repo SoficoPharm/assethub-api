@@ -6,7 +6,6 @@ public class AppUser
 
     public string FullName { get; set; } = string.Empty;
     public string UserName { get; set; } = string.Empty;
-    public string Password { get; set; } = "123456";
 
     public string Email { get; set; } = string.Empty;
     public string EmployeeId { get; set; } = string.Empty;

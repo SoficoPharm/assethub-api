@@ -19,10 +19,6 @@ public class AppDbContext : DbContext
     public DbSet<SystemUser> SystemUsers { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<AppUser>()
-            .HasIndex(x => x.UserName)
-            .IsUnique();
-
         modelBuilder.Entity<Device>()
             .HasIndex(x => x.DeviceCode)
             .IsUnique();
