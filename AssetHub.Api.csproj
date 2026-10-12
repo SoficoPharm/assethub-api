@@ -25,6 +25,12 @@
     <EmbeddedResource Remove="AssetHub.Api.Tests\**" />
   </ItemGroup>
 
+  <!-- Never publish local secrets, the config templates, or local user uploads. -->
+  <ItemGroup>
+    <Content Update="appsettings.Development.json;appsettings.*.example.json" CopyToPublishDirectory="Never" />
+    <Content Update="wwwroot\uploads\**" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <ItemGroup>
     <Folder Include="Helpers\" />
     <Folder Include="Services\" />
