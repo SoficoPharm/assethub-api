@@ -23,6 +23,8 @@ public class Device
     public string? Cpu { get; set; }
     public string? Gpu { get; set; }
     public int? Screens { get; set; }
+    /// <summary>Screen size in inches (7–100, one decimal), e.g. 15.6. Stored as decimal(4,1).</summary>
+    public decimal? ScreenSizeInches { get; set; }
     public bool Printer { get; set; } = false;
     public bool Scanner { get; set; } = false;
 

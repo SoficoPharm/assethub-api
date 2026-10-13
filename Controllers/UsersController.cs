@@ -117,18 +117,18 @@ public class UsersController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.FullName))
             return BadRequest(new { message = "Full name is required" });
 
+        if (string.IsNullOrWhiteSpace(request.EmployeeId))
+            return BadRequest(new { message = "Employee ID is required" });
+
+        var employeeId = request.EmployeeId.Trim();
+
         var email = NormalizeEmail(request.Email);
 
         if (email != null && await _context.Users.AnyAsync(x => x.Email == email))
             return BadRequest(new { message = "Email already exists" });
 
-        var employeeId = string.IsNullOrWhiteSpace(request.EmployeeId)
-            ? await CodeGenerator.NextAsync(_context.Users.Select(x => x.EmployeeId), "EMP-", 3)
-            : request.EmployeeId.Trim();
-
-        var employeeExists = await _context.Users.AnyAsync(x => x.EmployeeId == employeeId);
-        if (employeeExists)
-            return BadRequest(new { message = "Employee ID already exists" });
+        if (await EmployeeIdTakenAsync(employeeId, excludeUserId: null))
+            return EmployeeIdConflict(employeeId);
 
         var imageUrl = await SaveUserImageAsync(request.ImageFile);
 
@@ -179,16 +179,18 @@ public class UsersController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.FullName))
             return BadRequest(new { message = "Full name is required" });
 
+        if (string.IsNullOrWhiteSpace(request.EmployeeId))
+            return BadRequest(new { message = "Employee ID is required" });
+
+        var employeeId = request.EmployeeId.Trim();
+
         var email = NormalizeEmail(request.Email);
 
         if (email != null && await _context.Users.AnyAsync(x => x.Email == email && x.Id != id))
             return BadRequest(new { message = "Email already exists" });
 
-        var employeeId = string.IsNullOrWhiteSpace(request.EmployeeId) ? user.EmployeeId : request.EmployeeId.Trim();
-
-        var employeeExists = await _context.Users.AnyAsync(x => x.EmployeeId == employeeId && x.Id != id);
-        if (employeeExists)
-            return BadRequest(new { message = "Employee ID already exists" });
+        if (await EmployeeIdTakenAsync(employeeId, excludeUserId: id))
+            return EmployeeIdConflict(employeeId);
 
         var imageUrl = await SaveUserImageAsync(request.ImageFile);
 
@@ -314,6 +316,17 @@ public class UsersController : ControllerBase
         var request = HttpContext.Request;
         return $"{request.Scheme}://{request.Host}/uploads/users/{fileName}";
     }
+
+    /// <summary>Employee IDs are unique ignoring case (and surrounding spaces of stored values).</summary>
+    private Task<bool> EmployeeIdTakenAsync(string employeeId, int? excludeUserId)
+    {
+        var normalized = employeeId.ToLower();
+        return _context.Users.AnyAsync(x =>
+            x.EmployeeId.Trim().ToLower() == normalized && (excludeUserId == null || x.Id != excludeUserId));
+    }
+
+    private ConflictObjectResult EmployeeIdConflict(string employeeId) =>
+        Conflict(new { message = $"Employee ID {employeeId} already exists" });
 
     /// <summary>Email is optional: empty or whitespace is stored as NULL.</summary>
     private static string? NormalizeEmail(string? email) =>

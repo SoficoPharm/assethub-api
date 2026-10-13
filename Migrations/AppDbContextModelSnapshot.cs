@@ -210,6 +210,10 @@ namespace AssetHub.Api.Migrations
                     b.Property<bool>("Scanner")
                         .HasColumnType("bit");
 
+                    b.Property<decimal?>("ScreenSizeInches")
+                        .HasPrecision(4, 1)
+                        .HasColumnType("decimal(4,1)");
+
                     b.Property<int?>("Screens")
                         .HasColumnType("int");
 

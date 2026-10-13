@@ -33,6 +33,10 @@ public class AppDbContext : DbContext
             .HasDatabaseName(SerialNumbers.UniqueIndexName)
             .HasFilter("[SerialNumber] IS NOT NULL");
 
+        modelBuilder.Entity<Device>()
+            .Property(x => x.ScreenSizeInches)
+            .HasPrecision(4, 1);
+
         modelBuilder.Entity<SystemUser>()
             .HasIndex(x => x.UserName)
             .IsUnique();
