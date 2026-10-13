@@ -108,7 +108,7 @@ public class UsersController : ControllerBase
         });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPost]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(25_000_000)]
@@ -117,11 +117,9 @@ public class UsersController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.FullName))
             return BadRequest(new { message = "Full name is required" });
 
-        if (string.IsNullOrWhiteSpace(request.Email))
-            return BadRequest(new { message = "Email is required" });
+        var email = NormalizeEmail(request.Email);
 
-        var emailExists = await _context.Users.AnyAsync(x => x.Email == request.Email.Trim());
-        if (emailExists)
+        if (email != null && await _context.Users.AnyAsync(x => x.Email == email))
             return BadRequest(new { message = "Email already exists" });
 
         var employeeId = string.IsNullOrWhiteSpace(request.EmployeeId)
@@ -140,8 +138,8 @@ public class UsersController : ControllerBase
         var user = new AppUser
         {
             FullName = request.FullName.Trim(),
-            UserName = request.Email.Trim().Split('@')[0],
-            Email = request.Email.Trim(),
+            UserName = DeriveUserName(email, employeeId),
+            Email = email,
             EmployeeId = employeeId,
             Department = request.Department?.Trim() ?? "",
             JobTitle = request.JobTitle?.Trim() ?? "",
@@ -167,7 +165,7 @@ public class UsersController : ControllerBase
         });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPut("{id:int}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(25_000_000)]
@@ -181,11 +179,9 @@ public class UsersController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.FullName))
             return BadRequest(new { message = "Full name is required" });
 
-        if (string.IsNullOrWhiteSpace(request.Email))
-            return BadRequest(new { message = "Email is required" });
+        var email = NormalizeEmail(request.Email);
 
-        var emailExists = await _context.Users.AnyAsync(x => x.Email == request.Email.Trim() && x.Id != id);
-        if (emailExists)
+        if (email != null && await _context.Users.AnyAsync(x => x.Email == email && x.Id != id))
             return BadRequest(new { message = "Email already exists" });
 
         var employeeId = string.IsNullOrWhiteSpace(request.EmployeeId) ? user.EmployeeId : request.EmployeeId.Trim();
@@ -197,8 +193,8 @@ public class UsersController : ControllerBase
         var imageUrl = await SaveUserImageAsync(request.ImageFile);
 
         user.FullName = request.FullName.Trim();
-        user.Email = request.Email.Trim();
-        user.UserName = request.Email.Trim().Split('@')[0];
+        user.Email = email;
+        user.UserName = DeriveUserName(email, employeeId);
         user.EmployeeId = employeeId;
         user.Department = request.Department?.Trim() ?? "";
         user.JobTitle = request.JobTitle?.Trim() ?? "";
@@ -233,7 +229,7 @@ public class UsersController : ControllerBase
         });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPut("{id:int}/toggle-active")]
     public async Task<IActionResult> ToggleActive(int id)
     {
@@ -268,7 +264,7 @@ public class UsersController : ControllerBase
         });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanDelete)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteUser(int id)
     {
@@ -318,6 +314,14 @@ public class UsersController : ControllerBase
         var request = HttpContext.Request;
         return $"{request.Scheme}://{request.Host}/uploads/users/{fileName}";
     }
+
+    /// <summary>Email is optional: empty or whitespace is stored as NULL.</summary>
+    private static string? NormalizeEmail(string? email) =>
+        string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+
+    /// <summary>The email prefix, or the employee ID when there is no email.</summary>
+    private static string DeriveUserName(string? email, string employeeId) =>
+        email != null ? email.Split('@')[0] : employeeId;
 
     private static string GetInitials(string? name)
     {

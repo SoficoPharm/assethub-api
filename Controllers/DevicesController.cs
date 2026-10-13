@@ -143,7 +143,7 @@ public class DevicesController : ControllerBase
     }
 
     /// <summary>Lets the add/edit forms warn about a duplicate serial before saving.</summary>
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpGet("check-serial")]
     public async Task<IActionResult> CheckSerial([FromQuery] string? serial, [FromQuery] string? excludeCode)
     {
@@ -168,7 +168,7 @@ public class DevicesController : ControllerBase
         });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPost]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(25_000_000)]
@@ -176,6 +176,10 @@ public class DevicesController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.DeviceName))
             return BadRequest(new { message = "Device name is required" });
+
+        var hardwareError = ValidateRequiredHardware(request);
+        if (hardwareError != null)
+            return BadRequest(new { message = hardwareError });
 
         var status = string.IsNullOrWhiteSpace(request.Status) ? DeviceStatuses.Available : request.Status.Trim();
 
@@ -236,7 +240,7 @@ public class DevicesController : ControllerBase
         });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPut("by-code/{code}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(25_000_000)]
@@ -251,6 +255,10 @@ public class DevicesController : ControllerBase
 
         if (string.IsNullOrWhiteSpace(request.DeviceName))
             return BadRequest(new { message = "Device name is required" });
+
+        var hardwareError = ValidateRequiredHardware(request);
+        if (hardwareError != null)
+            return BadRequest(new { message = hardwareError });
 
         var serial = SerialNumbers.Normalize(request.SerialNumber);
         var serialOwner = await FindSerialOwnerAsync(serial, excludeDeviceId: device.Id);
@@ -303,7 +311,7 @@ public class DevicesController : ControllerBase
         });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPut("{id:int}/status")]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] string status)
     {
@@ -328,7 +336,7 @@ public class DevicesController : ControllerBase
         return Ok(new { message = "Device status updated successfully" });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanDelete)]
     [HttpDelete("by-code/{code}")]
     public async Task<IActionResult> DeleteDeviceByCode(string code)
     {
@@ -347,6 +355,29 @@ public class DevicesController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Device deleted successfully" });
+    }
+
+    /// <summary>Device types (case-insensitive) that must have RAM, Storage and CPU.</summary>
+    private static readonly string[] TypesRequiringHardware = { "Laptop", "Desktop" };
+
+    /// <summary>
+    /// Laptops and desktops need RAM, Storage and CPU. Other types leave them optional.
+    /// Returns an error message listing the missing fields, or null when valid.
+    /// </summary>
+    private static string? ValidateRequiredHardware(CreateDeviceRequest request)
+    {
+        var type = request.DeviceType?.Trim() ?? "";
+        if (!TypesRequiringHardware.Contains(type, StringComparer.OrdinalIgnoreCase))
+            return null;
+
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(request.Ram)) missing.Add("RAM");
+        if (string.IsNullOrWhiteSpace(request.Storage)) missing.Add("Storage");
+        if (string.IsNullOrWhiteSpace(request.Cpu)) missing.Add("CPU");
+
+        return missing.Count == 0
+            ? null
+            : $"RAM, Storage and CPU are required for {type} devices. Missing: {string.Join(", ", missing)}.";
     }
 
     /// <summary>

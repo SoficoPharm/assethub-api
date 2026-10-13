@@ -41,7 +41,7 @@ public class DeviceTypesController : ControllerBase
         return Ok(data);
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateDeviceTypeDto dto)
     {
@@ -78,7 +78,7 @@ public class DeviceTypesController : ControllerBase
         });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateDeviceTypeDto dto)
     {
@@ -121,7 +121,7 @@ public class DeviceTypesController : ControllerBase
 
 
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanDelete)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {

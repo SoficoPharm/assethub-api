@@ -50,7 +50,7 @@ public class AssignmentsController : ControllerBase
         return Ok(data);
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPost]
     public async Task<IActionResult> AssignDevice([FromBody] AssignDeviceRequest request)
     {
@@ -100,7 +100,7 @@ public class AssignmentsController : ControllerBase
         });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPut("{id:int}/return")]
     public async Task<IActionResult> ReturnDevice(int id)
     {

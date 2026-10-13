@@ -43,7 +43,7 @@ public class DepartmentsController : ControllerBase
         return Ok(departments);
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPost]
     public async Task<IActionResult> CreateDepartment([FromBody] CreateDepartmentDto dto)
     {
@@ -80,7 +80,7 @@ public class DepartmentsController : ControllerBase
         });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanCreateOrEdit)]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdateDepartment(int id, [FromBody] UpdateDepartmentDto dto)
     {
@@ -118,7 +118,7 @@ public class DepartmentsController : ControllerBase
         return Ok(new { message = "Department updated successfully" });
     }
 
-    [Authorize(Policy = Policies.CanEdit)]
+    [Authorize(Policy = Policies.CanDelete)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteDepartment(int id)
     {
