@@ -62,3 +62,14 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     private record LoginResponse(string Token);
 }
+
+
+/// <summary>
+/// All API tests share one ApiFactory. The factory passes its settings through process-wide
+/// environment variables, so two factories running in parallel would read each other's database.
+/// </summary>
+[CollectionDefinition(Name)]
+public class ApiCollection : ICollectionFixture<ApiFactory>
+{
+    public const string Name = "Api";
+}

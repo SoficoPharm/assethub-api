@@ -8,6 +8,7 @@ namespace AssetHub.Api.Migrations
     /// Data-only migration: SystemUsers.Role may now only be SuperAdmin, Admin or Viewer.
     /// Role checks are case-sensitive, so exact casing is rewritten too.
     /// Any other value (e.g. "IT Support", "Manager") becomes Viewer.
+    /// SupportIT (added in Phase 2) is kept, so this never demotes it on a database that already has it.
     /// </summary>
     public partial class NormalizeSystemUserRoles : Migration
     {
@@ -19,6 +20,7 @@ UPDATE SystemUsers
 SET Role = CASE
     WHEN LTRIM(RTRIM(Role)) = 'SuperAdmin' THEN 'SuperAdmin'
     WHEN LTRIM(RTRIM(Role)) = 'Admin' THEN 'Admin'
+    WHEN LTRIM(RTRIM(Role)) = 'SupportIT' THEN 'SupportIT'
     ELSE 'Viewer'
 END;");
         }

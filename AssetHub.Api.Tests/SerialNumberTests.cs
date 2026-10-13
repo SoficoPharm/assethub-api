@@ -19,7 +19,8 @@ public class SerialNumberNormalizeTests
         Assert.Equal(expected, SerialNumbers.Normalize(input));
 }
 
-public class SerialNumberApiTests : IClassFixture<ApiFactory>
+[Collection(ApiCollection.Name)]
+public class SerialNumberApiTests
 {
     private readonly ApiFactory _factory;
 
@@ -38,6 +39,9 @@ public class SerialNumberApiTests : IClassFixture<ApiFactory>
         { new StringContent("Windows"), "Platform" },
         { new StringContent("Dell"), "Brand" },
         { new StringContent("Latitude"), "Model" },
+        { new StringContent("16GB"), "Ram" },
+        { new StringContent("512GB SSD"), "Storage" },
+        { new StringContent("Core i7"), "Cpu" },
         { new StringContent("Available"), "Status" }
     };
 

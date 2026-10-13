@@ -101,7 +101,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy(Policies.RequireSuperAdmin, policy => policy.RequireRole(Roles.SuperAdmin));
-    options.AddPolicy(Policies.CanEdit, policy => policy.RequireRole(Roles.SuperAdmin, Roles.Admin));
+    options.AddPolicy(Policies.CanCreateOrEdit, policy => policy.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.SupportIT));
+    options.AddPolicy(Policies.CanDelete, policy => policy.RequireRole(Roles.SuperAdmin, Roles.Admin));
 });
 
 builder.Services.AddEndpointsApiExplorer();
