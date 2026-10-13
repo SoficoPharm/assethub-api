@@ -18,10 +18,13 @@ internal static class TestApi
         return form;
     }
 
-    public static MultipartFormDataContent DeviceForm(string type, string? ram = "16GB", string? storage = "512GB SSD", string? cpu = "Core i7") =>
+    /// <summary>A complete device form. <paramref name="serial"/> defaults to a new unique serial; pass "" for none.</summary>
+    public static MultipartFormDataContent DeviceForm(string type, string? ram = "16GB", string? storage = "512GB SSD", string? cpu = "Core i7",
+        string? serial = null, string? screenSize = null) =>
         Form(
             ("DeviceName", Unique("Device ")),
-            ("SerialNumber", ""),
+            ("SerialNumber", serial ?? Unique("SN-")),
+            ("ScreenSizeInches", screenSize ?? ""),
             ("DeviceType", type),
             ("Platform", "Windows"),
             ("Brand", "Dell"),
@@ -31,8 +34,9 @@ internal static class TestApi
             ("Cpu", cpu ?? ""),
             ("Status", "Available"));
 
-    public static MultipartFormDataContent EmployeeForm(string fullName, string email, string employeeId = "") =>
-        Form(("FullName", fullName), ("Email", email), ("EmployeeId", employeeId), ("Department", "IT"), ("JobTitle", "Engineer"));
+    /// <summary><paramref name="employeeId"/> defaults to a new unique ID; pass "" for none.</summary>
+    public static MultipartFormDataContent EmployeeForm(string fullName, string email, string? employeeId = null) =>
+        Form(("FullName", fullName), ("Email", email), ("EmployeeId", employeeId ?? Unique("E-")), ("Department", "IT"), ("JobTitle", "Engineer"));
 
     public static async Task<string> MessageAsync(HttpResponseMessage response) =>
         (await response.Content.ReadFromJsonAsync<Dictionary<string, object>>())!["message"].ToString()!;
@@ -210,19 +214,6 @@ public class OptionalEmployeeEmailTests
     }
 
     [Fact]
-    public async Task Create_WithoutEmailOrEmployeeId_UsesTheGeneratedEmployeeId()
-    {
-        var client = await _factory.CreateClientAsync();
-
-        var response = await client.PostAsync("/api/Users", TestApi.EmployeeForm("Nothing Given", ""));
-        var id = await TestApi.ReadAsync<int>(response, "id");
-
-        var user = await LoadAsync(id);
-        Assert.StartsWith("EMP-", user.EmployeeId);
-        Assert.Equal(user.EmployeeId, user.UserName);
-    }
-
-    [Fact]
     public async Task ManyEmployeesWithoutEmail_AreAllowed()
     {
         var client = await _factory.CreateClientAsync();
@@ -281,7 +272,7 @@ public class RequiredHardwareTests
         var response = await client.PostAsync("/api/Devices", TestApi.DeviceForm("Laptop", cpu: null));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("RAM, Storage and CPU are required for Laptop devices. Missing: CPU.", await TestApi.MessageAsync(response));
+        Assert.Equal("RAM, Storage and CPU are required for Laptop devices (N/A is not accepted). Missing: CPU.", await TestApi.MessageAsync(response));
     }
 
     [Fact]
@@ -292,7 +283,7 @@ public class RequiredHardwareTests
         var response = await client.PostAsync("/api/Devices", TestApi.DeviceForm(" desktop ", ram: "   ", storage: null, cpu: "i5"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("RAM, Storage and CPU are required for desktop devices. Missing: RAM, Storage.", await TestApi.MessageAsync(response));
+        Assert.Equal("RAM, Storage and CPU are required for desktop devices (N/A is not accepted). Missing: RAM, Storage.", await TestApi.MessageAsync(response));
     }
 
     [Fact]

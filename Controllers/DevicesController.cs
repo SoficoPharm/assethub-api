@@ -1,4 +1,5 @@
-﻿using AssetHub.Api.Data;
+﻿using System.Globalization;
+using AssetHub.Api.Data;
 using AssetHub.Api.Authorization;
 using AssetHub.Api.DTOs;
 using AssetHub.Api.Infrastructure;
@@ -52,6 +53,8 @@ public class DevicesController : ControllerBase
                 cpu = device.Cpu,
                 gpu = device.Gpu,
                 screens = device.Screens,
+
+                screenSizeInches = device.ScreenSizeInches,
                 printer = device.Printer,
                 scanner = device.Scanner,
                 status = device.Status,
@@ -92,6 +95,8 @@ public class DevicesController : ControllerBase
                 cpu = device.Cpu,
                 gpu = device.Gpu,
                 screens = device.Screens,
+
+                screenSizeInches = device.ScreenSizeInches,
                 printer = device.Printer,
                 scanner = device.Scanner,
                 imageUrl = device.ImageUrl
@@ -131,6 +136,8 @@ public class DevicesController : ControllerBase
             cpu = device.Cpu,
             gpu = device.Gpu,
             screens = device.Screens,
+
+            screenSizeInches = device.ScreenSizeInches,
             printer = device.Printer,
             scanner = device.Scanner,
             status = device.Status,
@@ -177,9 +184,9 @@ public class DevicesController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.DeviceName))
             return BadRequest(new { message = "Device name is required" });
 
-        var hardwareError = ValidateRequiredHardware(request);
-        if (hardwareError != null)
-            return BadRequest(new { message = hardwareError });
+        var fieldError = ValidateDeviceFields(request, out var screenSizeInches);
+        if (fieldError != null)
+            return BadRequest(new { message = fieldError });
 
         var status = string.IsNullOrWhiteSpace(request.Status) ? DeviceStatuses.Available : request.Status.Trim();
 
@@ -215,6 +222,7 @@ public class DevicesController : ControllerBase
             Cpu = request.Cpu?.Trim(),
             Gpu = request.Gpu?.Trim(),
             Screens = request.Screens,
+            ScreenSizeInches = screenSizeInches,
             Printer = request.Printer,
             Scanner = request.Scanner,
             Status = status,
@@ -256,9 +264,9 @@ public class DevicesController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.DeviceName))
             return BadRequest(new { message = "Device name is required" });
 
-        var hardwareError = ValidateRequiredHardware(request);
-        if (hardwareError != null)
-            return BadRequest(new { message = hardwareError });
+        var fieldError = ValidateDeviceFields(request, out var screenSizeInches);
+        if (fieldError != null)
+            return BadRequest(new { message = fieldError });
 
         var serial = SerialNumbers.Normalize(request.SerialNumber);
         var serialOwner = await FindSerialOwnerAsync(serial, excludeDeviceId: device.Id);
@@ -288,6 +296,7 @@ public class DevicesController : ControllerBase
         device.Cpu = request.Cpu?.Trim();
         device.Gpu = request.Gpu?.Trim();
         device.Screens = request.Screens;
+        device.ScreenSizeInches = screenSizeInches;
         device.Printer = request.Printer;
         device.Scanner = request.Scanner;
         device.Notes = request.Notes?.Trim() ?? "";
@@ -360,24 +369,70 @@ public class DevicesController : ControllerBase
     /// <summary>Device types (case-insensitive) that must have RAM, Storage and CPU.</summary>
     private static readonly string[] TypesRequiringHardware = { "Laptop", "Desktop" };
 
+    /// <summary>Device types (case-insensitive) that may be saved without a serial number.</summary>
+    private static readonly string[] TypesWithoutSerial = { "Bag", "SIM Line" };
+
+    public const decimal MinScreenSizeInches = 7m;
+    public const decimal MaxScreenSizeInches = 100m;
+
     /// <summary>
-    /// Laptops and desktops need RAM, Storage and CPU. Other types leave them optional.
-    /// Returns an error message listing the missing fields, or null when valid.
+    /// Field rules shared by create and update. Returns an error message, or null when valid.
+    /// - Device Type is required.
+    /// - Serial Number is required except for Bag and SIM Line.
+    /// - Laptop and Desktop need RAM, Storage and CPU; "N/A" does not count as filled for them.
+    /// - Screen size, when given, is 7–100 inches with at most one decimal.
     /// </summary>
-    private static string? ValidateRequiredHardware(CreateDeviceRequest request)
+    private static string? ValidateDeviceFields(CreateDeviceRequest request, out decimal? screenSizeInches)
     {
+        screenSizeInches = null;
+
         var type = request.DeviceType?.Trim() ?? "";
-        if (!TypesRequiringHardware.Contains(type, StringComparer.OrdinalIgnoreCase))
+        if (type.Length == 0)
+            return "Device type is required";
+
+        if (!TypesWithoutSerial.Contains(type, StringComparer.OrdinalIgnoreCase)
+            && SerialNumbers.Normalize(request.SerialNumber) == null)
+            return $"Serial number is required for {type} devices";
+
+        if (TypesRequiringHardware.Contains(type, StringComparer.OrdinalIgnoreCase))
+        {
+            static bool IsMissing(string? value) =>
+                string.IsNullOrWhiteSpace(value) || value.Trim().Equals("N/A", StringComparison.OrdinalIgnoreCase);
+
+            var missing = new List<string>();
+            if (IsMissing(request.Ram)) missing.Add("RAM");
+            if (IsMissing(request.Storage)) missing.Add("Storage");
+            if (IsMissing(request.Cpu)) missing.Add("CPU");
+
+            if (missing.Count > 0)
+                return $"RAM, Storage and CPU are required for {type} devices (N/A is not accepted). Missing: {string.Join(", ", missing)}.";
+        }
+
+        return ParseScreenSize(request.ScreenSizeInches, out screenSizeInches);
+    }
+
+    /// <summary>
+    /// Parses the optional screen size. The form sends it as text and it is always read with
+    /// a "." decimal separator, whatever the server's culture. Returns an error message or null.
+    /// </summary>
+    private static string? ParseScreenSize(string? text, out decimal? value)
+    {
+        value = null;
+
+        if (string.IsNullOrWhiteSpace(text))
             return null;
 
-        var missing = new List<string>();
-        if (string.IsNullOrWhiteSpace(request.Ram)) missing.Add("RAM");
-        if (string.IsNullOrWhiteSpace(request.Storage)) missing.Add("Storage");
-        if (string.IsNullOrWhiteSpace(request.Cpu)) missing.Add("CPU");
+        if (!decimal.TryParse(text.Trim(), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var size))
+            return "Screen size must be a number, e.g. 15.6";
 
-        return missing.Count == 0
-            ? null
-            : $"RAM, Storage and CPU are required for {type} devices. Missing: {string.Join(", ", missing)}.";
+        if (size < MinScreenSizeInches || size > MaxScreenSizeInches)
+            return $"Screen size must be between {MinScreenSizeInches} and {MaxScreenSizeInches} inches";
+
+        if (decimal.Round(size, 1) != size)
+            return "Screen size can have at most one decimal, e.g. 15.6";
+
+        value = size;
+        return null;
     }
 
     /// <summary>

@@ -31,11 +31,11 @@ public class SerialNumberApiTests
 
     private static string NewSerial() => "SN-" + Guid.NewGuid().ToString("N")[..10].ToUpperInvariant();
 
-    private static MultipartFormDataContent DeviceForm(string name, string? serial) => new()
+    private static MultipartFormDataContent DeviceForm(string name, string? serial, string type = "Laptop") => new()
     {
         { new StringContent(name), "DeviceName" },
         { new StringContent(serial ?? ""), "SerialNumber" },
-        { new StringContent("Laptop"), "DeviceType" },
+        { new StringContent(type), "DeviceType" },
         { new StringContent("Windows"), "Platform" },
         { new StringContent("Dell"), "Brand" },
         { new StringContent("Latitude"), "Model" },
@@ -45,9 +45,9 @@ public class SerialNumberApiTests
         { new StringContent("Available"), "Status" }
     };
 
-    private static async Task<string> CreateDeviceAsync(HttpClient client, string name, string? serial)
+    private static async Task<string> CreateDeviceAsync(HttpClient client, string name, string? serial, string type = "Laptop")
     {
-        var response = await client.PostAsync("/api/Devices", DeviceForm(name, serial));
+        var response = await client.PostAsync("/api/Devices", DeviceForm(name, serial, type));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
         return body!["deviceCode"].ToString()!;
@@ -87,12 +87,12 @@ public class SerialNumberApiTests
     }
 
     [Fact]
-    public async Task Create_WithoutSerial_IsAllowedForManyDevices()
+    public async Task Create_WithoutSerial_IsAllowedForManyBagsAndSimLines()
     {
         var client = await _factory.CreateClientAsync();
 
-        var first = await CreateDeviceAsync(client, "No serial 1", "");
-        var second = await CreateDeviceAsync(client, "No serial 2", "   ");
+        var first = await CreateDeviceAsync(client, "No serial 1", "", "Bag");
+        var second = await CreateDeviceAsync(client, "No serial 2", "   ", "SIM Line");
 
         Assert.Null(await GetSerialAsync(client, first));
         Assert.Null(await GetSerialAsync(client, second));

@@ -24,6 +24,8 @@ public class CreateDeviceRequest
     public string? Cpu { get; set; }
     public string? Gpu { get; set; }
     public int? Screens { get; set; }
+    /// <summary>Text, parsed with a "." decimal separator regardless of server culture (e.g. "15.6").</summary>
+    public string? ScreenSizeInches { get; set; }
     public bool Printer { get; set; }
     public bool Scanner { get; set; }
 
